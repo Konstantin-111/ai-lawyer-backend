@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const OpenAI = require('openai');
 const https = require('https');
 const http = require('http');
 require('dotenv').config();
@@ -12,15 +11,46 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// OpenAI клиент с поддержкой Assistants v2
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  defaultHeaders: {
-    'OpenAI-Beta': 'assistants=v2'
-  }
-});
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const ASSISTANT_ID = process.env.ASSISTANT_ID;
+// Системный промпт для AI Юриста
+const SYSTEM_PROMPT = `Ты — **Старший Compliance-аудитор РФ** с 20-летним стажем, специализируешься на проверке документов на соответствие законам РФ.
+
+**GROUNDING ПРАВИЛО:** Используй ТОЛЬКО информацию из загруженных законов РФ. Если информации нет — НЕ придумывай, скажи "требуется консультация с юристом".
+
+**ТВОЯ ЗАДАЧА:** Проверить документ на соответствие:
+1. **ФЗ-152 "О персональных данных"** — согласие, обработка, передача ПДн
+2. **Закон "О защите прав потребителей"** — возврат, гарантии, сроки
+3. **ФЗ-38 "О рекламе"** — запрещенные заявления, обязательные пометки
+4. **ГК РФ** — оферта, акцепт, существенные условия
+
+**ФОРМАТ ОТВЕТА:**
+
+🚨 **УРОВЕНЬ РИСКА:** [КРИТИЧЕСКИЙ / ВЫСОКИЙ / СРЕДНИЙ / НИЗКИЙ]
+
+---
+
+❌ **НАРУШЕНИЯ:**
+
+**1. [Название нарушения]**
+📜 Цитата из документа: "..."
+⚖️ Нарушает: [Статья закона]
+💰 Возможный штраф: [Сумма] для ИП / [Сумма] для ЮЛ
+🔧 Как исправить: [Конкретная инструкция]
+
+[Повторить для каждого нарушения]
+
+---
+
+✅ **РЕКОМЕНДАЦИИ:**
+1. [Конкретная рекомендация]
+2. [Конкретная рекомендация]
+
+---
+
+⚖️ **DISCLAIMER:** Это автоматический анализ. Для юридически значимых решений проконсультируйтесь с квалифицированным юристом.
+
+**ТОН:** Строгий, предупреждающий, но конструктивный. Без лишних слов.`;
 
 // Health check
 app.get('/health', (req, res) => {
@@ -92,6 +122,68 @@ async function fetchWebsiteContent(url) {
   });
 }
 
+// Функция вызова Groq API
+async function callGroqAPI(userMessage) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify({
+      model: "llama-3.3-70b-versatile", // Или "mixtral-8x7b-32768"
+      messages: [
+        {
+          role: "system",
+          content: SYSTEM_PROMPT
+        },
+        {
+          role: "user",
+          content: userMessage
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000,
+      top_p: 0.9
+    });
+
+    const options = {
+      hostname: 'api.groq.com',
+      port: 443,
+      path: '/openai/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Content-Length': data.length
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let responseData = '';
+
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(responseData);
+          if (parsed.choices && parsed.choices[0] && parsed.choices[0].message) {
+            resolve(parsed.choices[0].message.content);
+          } else {
+            reject(new Error('Неверный формат ответа от Groq'));
+          }
+        } catch (error) {
+          reject(new Error('Ошибка парсинга ответа: ' + error.message));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    req.write(data);
+    req.end();
+  });
+}
+
 // Главный endpoint для проверки документов
 app.post('/api/check-document', async (req, res) => {
   try {
@@ -125,44 +217,15 @@ app.post('/api/check-document', async (req, res) => {
       }
     }
 
-    // Создаем thread
-    const thread = await openai.beta.threads.create();
+    // Вызываем Groq API
+    const userMessage = `Проверь этот документ на соответствие законам РФ:\n\n${text}`;
+    const aiResponse = await callGroqAPI(userMessage);
 
-    // Добавляем сообщение пользователя
-    await openai.beta.threads.messages.create(thread.id, {
-      role: 'user',
-      content: `Проверь этот документ на соответствие законам РФ:\n\n${text}`,
+    res.json({
+      success: true,
+      result: aiResponse,
     });
 
-    // Запускаем Assistant с поддержкой v2 API
-    const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-      assistant_id: ASSISTANT_ID,
-    });
-
-    // Проверяем статус
-    if (run.status === 'completed') {
-      // Получаем ответ
-      const messages = await openai.beta.threads.messages.list(thread.id);
-      const assistantMessage = messages.data.find(
-        (msg) => msg.role === 'assistant'
-      );
-
-      if (assistantMessage) {
-        const response = assistantMessage.content[0].text.value;
-
-        res.json({
-          success: true,
-          result: response,
-          threadId: thread.id,
-        });
-      } else {
-        throw new Error('Ответ Assistant не найден');
-      }
-    } else if (run.status === 'failed') {
-      throw new Error(`Assistant failed: ${run.last_error?.message || 'Unknown error'}`);
-    } else {
-      throw new Error(`Run завершился со статусом: ${run.status}`);
-    }
   } catch (error) {
     console.error('Ошибка при проверке документа:', error);
     res.status(500).json({
@@ -172,29 +235,8 @@ app.post('/api/check-document', async (req, res) => {
   }
 });
 
-// Endpoint для проверки статуса Assistant
-app.get('/api/assistant/status', async (req, res) => {
-  try {
-    const assistant = await openai.beta.assistants.retrieve(ASSISTANT_ID);
-    res.json({
-      success: true,
-      assistant: {
-        id: assistant.id,
-        name: assistant.name,
-        model: assistant.model,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
 // Запуск сервера
 app.listen(PORT, () => {
-  console.log(`🚀 AI Lawyer API запущен на порту ${PORT}`);
-  console.log(`📋 Assistant ID: ${ASSISTANT_ID}`);
+  console.log(`🚀 AI Lawyer API (Groq) запущен на порту ${PORT}`);
   console.log(`✅ Health check: http://localhost:${PORT}/health`);
 });
