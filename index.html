@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Юрист | Проверка документов</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 16px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #999);
+        }
+
+        .card {
+            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--tg-theme-text-color, #000);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 12px;
+            border: 2px solid var(--tg-theme-hint-color, #e0e0e0);
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000);
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid rgba(102, 126, 234, 0.1);
+            border-radius: 50%;
+            border-top: 3px solid #667eea;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+            animation: slideUp 0.4s ease;
+        }
+
+        .result.active {
+            display: block;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .risk-low {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .risk-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .risk-critical {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .violation {
+            background: rgba(255, 59, 48, 0.05);
+            border-left: 4px solid #ff3b30;
+            padding: 16px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+        }
+
+        .violation-quote {
+            font-style: italic;
+            color: var(--tg-theme-hint-color, #666);
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(0,0,0,0.02);
+            border-radius: 4px;
+        }
+
+        .violation-detail {
+            margin-bottom: 8px;
+        }
+
+        .violation-detail strong {
+            color: #ff3b30;
+        }
+
+        .violation-fix {
+            background: rgba(52, 199, 89, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        .violation-fix strong {
+            color: #34c759;
+        }
+
+        .recommendations {
+            background: rgba(102, 126, 234, 0.05);
+            border-left: 4px solid #667eea;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+        }
+
+        .recommendations h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #667eea;
+        }
+
+        .disclaimer {
+            background: rgba(255, 149, 0, 0.1);
+            border-left: 4px solid #ff9500;
+            padding: 12px;
+            margin-top: 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #666);
+        }
+
+        .price-info {
+            text-align: center;
+            padding: 16px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .price {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .price-label {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #999);
+        }
+
+        .back-btn {
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+            margin-bottom: 12px;
+        }
+
+        .back-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Форма проверки -->
+        <div id="checkForm">
+            <div class="header">
+                <h1>⚖️ AI Юрист</h1>
+                <p>Автоматическая проверка документов на соответствие законам РФ</p>
+            </div>
+
+            <div class="card price-info">
+                <div class="price">1 990 ₽</div>
+                <div class="price-label">Разовая проверка документа</div>
+            </div>
+
+            <div class="card">
+                <div class="input-group">
+                    <label>📄 Текст документа для проверки</label>
+                    <textarea 
+                        id="documentText" 
+                        placeholder="Вставьте текст вашей оферты, политики конфиденциальности или условий использования...&#10;&#10;Например:&#10;'Мы гарантируем результат 100%. Возврат средств не предусмотрен.'"></textarea>
+                </div>
+                <button class="btn" id="checkBtn">🔍 Проверить документ</button>
+            </div>
+
+            <div class="card">
+                <p style="font-size: 13px; color: var(--tg-theme-hint-color, #666); line-height: 1.6;">
+                    <strong>Что проверяет AI:</strong><br>
+                    • ФЗ-152 «О персональных данных»<br>
+                    • Закон «О защите прав потребителей»<br>
+                    • ФЗ-38 «О рекламе» и маркировка<br>
+                    • ГК РФ: корректность оферты
+                </p>
+            </div>
+        </div>
+
+        <!-- Экран загрузки -->
+        <div class="loading" id="loadingScreen">
+            <div class="spinner"></div>
+            <p>🤖 AI анализирует ваш документ...</p>
+            <p style="font-size: 12px; color: var(--tg-theme-hint-color, #999); margin-top: 8px;">
+                Это может занять 15-30 секунд
+            </p>
+        </div>
+
+        <!-- Результат проверки -->
+        <div class="result" id="resultScreen">
+            <button class="btn back-btn" id="backBtn">← Новая проверка</button>
+            
+            <div class="card">
+                <div id="resultContent">
+                    <!-- Контент заполнится из JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.enableClosingConfirmation();
+
+        // Элементы
+        const checkForm = document.getElementById('checkForm');
+        const loadingScreen = document.getElementById('loadingScreen');
+        const resultScreen = document.getElementById('resultScreen');
+        const documentText = document.getElementById('documentText');
+        const checkBtn = document.getElementById('checkBtn');
+        const backBtn = document.getElementById('backBtn');
+        const resultContent = document.getElementById('resultContent');
+
+        // API URL (замени на свой Render URL после деплоя)
+        const API_URL = 'https://your-backend.onrender.com/api/check';
+
+        // Обработчик кнопки проверки
+        checkBtn.addEventListener('click', async () => {
+            const text = documentText.value.trim();
+            
+            if (!text) {
+                tg.showAlert('Пожалуйста, вставьте текст документа для проверки');
+                return;
+            }
+
+            if (text.length < 100) {
+                tg.showAlert('Текст слишком короткий. Минимум 100 символов для анализа.');
+                return;
+            }
+
+            // Показываем загрузку
+            checkForm.style.display = 'none';
+            loadingScreen.classList.add('active');
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        userId: tg.initDataUnsafe?.user?.id || 'test_user'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Ошибка сервера');
+                }
+
+                const data = await response.json();
+                
+                // Показываем результат
+                displayResult(data.result);
+                
+                loadingScreen.classList.remove('active');
+                resultScreen.classList.add('active');
+
+            } catch (error) {
+                console.error('Error:', error);
+                loadingScreen.classList.remove('active');
+                checkForm.style.display = 'block';
+                tg.showAlert('Произошла ошибка при проверке. Попробуйте позже.');
+            }
+        });
+
+        // Обработчик кнопки "Назад"
+        backBtn.addEventListener('click', () => {
+            resultScreen.classList.remove('active');
+            checkForm.style.display = 'block';
+            documentText.value = '';
+            resultContent.innerHTML = '';
+        });
+
+        // Функция отображения результата
+        function displayResult(markdown) {
+            // Простой парсинг markdown результата
+            let html = markdown;
+
+            // Определяем уровень риска
+            let riskClass = 'risk-medium';
+            if (html.includes('Низкий')) riskClass = 'risk-low';
+            if (html.includes('Критический')) riskClass = 'risk-critical';
+
+            // Преобразуем markdown в HTML (упрощенный вариант)
+            html = html.replace(/### 🚨 (.*)/g, '<div class="risk-badge ' + riskClass + '">🚨 $1</div>');
+            html = html.replace(/### (.*)/g, '<h3 style="font-size: 18px; margin: 20px 0 12px 0;">$1</h3>');
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\* (.*)/g, '<div style="margin: 8px 0;">• $1</div>');
+            html = html.replace(/\n\n/g, '<br><br>');
+
+            resultContent.innerHTML = html;
+        }
+
+        // Обработка платежа (для будущей интеграции)
+        tg.onEvent('invoiceClosed', (object) => {
+            if (object.status === 'paid') {
+                tg.showAlert('✅ Оплата прошла успешно!');
+            }
+        });
+    </script>
+</body>
+</html>
