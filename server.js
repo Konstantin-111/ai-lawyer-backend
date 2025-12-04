@@ -9,47 +9,57 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Увеличиваем лимит для больших документов
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 // Системный промпт для AI Юриста
-const SYSTEM_PROMPT = `Ты — **Старший Compliance-аудитор РФ** с 20-летним стажем, специализируешься на проверке документов на соответствие законам РФ.
+const SYSTEM_PROMPT = `Ты — старший Compliance-аудитор РФ с 20-летним стажем. Проверь документ на соответствие законам РФ.
 
-**ТВОЯ ЗАДАЧА:** Проверить документ на соответствие:
-1. **ФЗ-152 "О персональных данных"** — согласие, обработка, передача ПДн
-2. **Закон "О защите прав потребителей"** — возврат, гарантии, сроки
-3. **ФЗ-38 "О рекламе"** — запрещенные заявления, обязательные пометки
-4. **ГК РФ** — оферта, акцепт, существенные условия
+ПРОВЕРЯЕМ:
+1. ФЗ-152 "О персональных данных"
+2. Закон "О защите прав потребителей"
+3. ФЗ-38 "О рекламе"
+4. ГК РФ (договорные условия)
 
-**ФОРМАТ ОТВЕТА:**
+ФОРМАТ ОТВЕТА:
 
-🚨 **УРОВЕНЬ РИСКА:** [КРИТИЧЕСКИЙ / ВЫСОКИЙ / СРЕДНИЙ / НИЗКИЙ]
-
----
-
-❌ **НАРУШЕНИЯ:**
-
-**1. [Название нарушения]**
-📜 Цитата из документа: "..."
-⚖️ Нарушает: [Статья закона]
-💰 Возможный штраф: [Сумма] для ИП / [Сумма] для ЮЛ
-🔧 Как исправить: [Конкретная инструкция]
+🚨 УРОВЕНЬ РИСКА: [КРИТИЧЕСКИЙ / ВЫСОКИЙ / СРЕДНИЙ / НИЗКИЙ]
 
 ---
 
-✅ **РЕКОМЕНДАЦИИ:**
+❌ НАРУШЕНИЯ:
+
+1. [Название нарушения]
+Цитата: "..."
+Нарушает: [Статья закона]
+Штраф: [Сумма] для ИП / [Сумма] для ЮЛ
+Как исправить: [Инструкция]
+
+---
+
+✅ РЕКОМЕНДАЦИИ:
 1. [Конкретная рекомендация]
 2. [Конкретная рекомендация]
 
 ---
 
-⚖️ **DISCLAIMER:** Это автоматический анализ. Для юридически значимых решений проконсультируйтесь с квалифицированным юристом.`;
+DISCLAIMER: Это автоматический анализ. Проконсультируйтесь с юристом.`;
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Функция очистки и нормализации текста
+function cleanText(text) {
+  return text
+    .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '') // Удаляем control characters
+    .replace(/[\u2028\u2029]/g, ' ') // Заменяем line/paragraph separators
+    .replace(/\r\n/g, '\n') // Нормализуем переносы строк
+    .replace(/\r/g, '\n')
+    .trim();
+}
 
 // Функция парсинга сайта
 async function fetchWebsiteContent(url) {
@@ -88,18 +98,18 @@ async function fetchWebsiteContent(url) {
         const sections = [];
         
         const offerMatch = text.match(/.{0,300}(оферта|публичная оферта|договор оферты|пользовательское соглашение).{0,3000}/i);
-        if (offerMatch) sections.push('ОФЕРТА/СОГЛАШЕНИЕ:\n' + offerMatch[0]);
+        if (offerMatch) sections.push('ОФЕРТА:\n' + offerMatch[0]);
         
-        const privacyMatch = text.match(/.{0,300}(политика конфиденциальности|обработка персональных данных|защита данных|согласие на обработку).{0,3000}/i);
-        if (privacyMatch) sections.push('\n\nПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ:\n' + privacyMatch[0]);
+        const privacyMatch = text.match(/.{0,300}(политика конфиденциальности|обработка персональных данных|защита данных).{0,3000}/i);
+        if (privacyMatch) sections.push('\n\nПОЛИТИКА:\n' + privacyMatch[0]);
         
-        const returnMatch = text.match(/.{0,300}(возврат|обмен|гарантия|возврат средств|условия возврата).{0,1500}/i);
-        if (returnMatch) sections.push('\n\nУСЛОВИЯ ВОЗВРАТА:\n' + returnMatch[0]);
+        const returnMatch = text.match(/.{0,300}(возврат|обмен|гарантия).{0,1500}/i);
+        if (returnMatch) sections.push('\n\nВОЗВРАТ:\n' + returnMatch[0]);
         
         if (sections.length > 0) {
-          resolve(sections.join('\n'));
+          resolve(cleanText(sections.join('\n')));
         } else {
-          resolve('СОДЕРЖИМОЕ САЙТА:\n' + text.substring(0, 4000));
+          resolve(cleanText('СОДЕРЖИМОЕ:\n' + text.substring(0, 4000)));
         }
       });
     }).on('error', (err) => {
@@ -111,7 +121,15 @@ async function fetchWebsiteContent(url) {
 // Функция вызова Groq API
 async function callGroqAPI(userMessage) {
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify({
+    // Очищаем текст перед отправкой
+    const cleanedMessage = cleanText(userMessage);
+    
+    // Ограничиваем размер сообщения
+    const truncatedMessage = cleanedMessage.length > 12000 
+      ? cleanedMessage.substring(0, 12000) + '\n\n[Текст обрезан]'
+      : cleanedMessage;
+
+    const payload = {
       model: "llama-3.3-70b-versatile",
       messages: [
         {
@@ -120,13 +138,15 @@ async function callGroqAPI(userMessage) {
         },
         {
           role: "user",
-          content: userMessage
+          content: truncatedMessage
         }
       ],
       temperature: 0.3,
       max_tokens: 4000,
       top_p: 0.9
-    });
+    };
+
+    const data = JSON.stringify(payload);
 
     const options = {
       hostname: 'api.groq.com',
@@ -136,11 +156,12 @@ async function callGroqAPI(userMessage) {
       headers: {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
         'Content-Type': 'application/json',
-        'Content-Length': data.length
+        'Content-Length': Buffer.byteLength(data)
       }
     };
 
     console.log('Отправка запроса к Groq API...');
+    console.log('Размер payload:', Buffer.byteLength(data), 'байт');
 
     const req = https.request(options, (res) => {
       let responseData = '';
@@ -151,46 +172,36 @@ async function callGroqAPI(userMessage) {
 
       res.on('end', () => {
         console.log('Получен ответ от Groq. Status:', res.statusCode);
-        console.log('Первые 500 символов ответа:', responseData.substring(0, 500));
 
         try {
           const parsed = JSON.parse(responseData);
           
-          // Проверяем наличие ошибки
           if (parsed.error) {
-            console.error('Groq API вернул ошибку:', parsed.error);
-            reject(new Error(`Groq API error: ${parsed.error.message || JSON.stringify(parsed.error)}`));
+            console.error('Groq API error:', parsed.error);
+            reject(new Error(`Groq API: ${parsed.error.message}`));
             return;
           }
 
-          // Проверяем структуру ответа
-          if (!parsed.choices || !Array.isArray(parsed.choices) || parsed.choices.length === 0) {
-            console.error('Неверная структура ответа:', JSON.stringify(parsed));
-            reject(new Error('Неверная структура ответа от Groq: отсутствует choices'));
+          if (!parsed.choices?.[0]?.message?.content) {
+            console.error('Неверная структура:', parsed);
+            reject(new Error('Неверный ответ от Groq'));
             return;
           }
 
-          const choice = parsed.choices[0];
-          if (!choice.message || !choice.message.content) {
-            console.error('Отсутствует message.content:', JSON.stringify(choice));
-            reject(new Error('Неверная структура ответа от Groq: отсутствует message.content'));
-            return;
-          }
-
-          console.log('Успешно получен ответ от AI, длина:', choice.message.content.length);
-          resolve(choice.message.content);
+          console.log('✅ Успешно получен ответ');
+          resolve(parsed.choices[0].message.content);
 
         } catch (error) {
-          console.error('Ошибка парсинга JSON:', error);
-          console.error('Сырой ответ:', responseData);
-          reject(new Error('Ошибка парсинга ответа от Groq: ' + error.message));
+          console.error('Ошибка парсинга:', error);
+          console.error('Сырой ответ:', responseData.substring(0, 500));
+          reject(new Error('Ошибка парсинга ответа: ' + error.message));
         }
       });
     });
 
     req.on('error', (error) => {
-      console.error('Ошибка запроса к Groq:', error);
-      reject(new Error('Ошибка соединения с Groq API: ' + error.message));
+      console.error('Ошибка запроса:', error);
+      reject(new Error('Ошибка соединения: ' + error.message));
     });
 
     req.write(data);
@@ -207,32 +218,41 @@ app.post('/api/check-document', async (req, res) => {
       return res.status(400).json({ error: 'Текст документа обязателен' });
     }
 
-    console.log(`[${new Date().toISOString()}] Проверка документа для пользователя: ${userId}`);
+    console.log(`[${new Date().toISOString()}] Проверка для: ${userId}`);
 
     // Если передан URL сайта, парсим его
     if (text.startsWith('URL: ')) {
       const url = text.replace('URL: ', '').trim();
-      console.log(`Парсинг сайта: ${url}`);
+      console.log(`Парсинг: ${url}`);
       
       try {
         text = await fetchWebsiteContent(url);
-        console.log(`Извлечено ${text.length} символов с сайта`);
+        console.log(`Извлечено ${text.length} символов`);
         
         if (text.length < 100) {
           return res.status(400).json({ 
-            error: 'На сайте слишком мало текста. Попробуйте другой URL или вставьте текст вручную.' 
+            error: 'На сайте слишком мало текста. Попробуйте вставить текст вручную.' 
           });
         }
       } catch (error) {
-        console.error('Ошибка парсинга сайта:', error);
+        console.error('Ошибка парсинга:', error);
         return res.status(400).json({ 
-          error: 'Не удалось загрузить содержимое сайта. Проверьте URL или попробуйте вставить текст вручную.' 
+          error: 'Не удалось загрузить сайт. Попробуйте вставить текст вручную.' 
         });
       }
     }
 
+    // Очищаем и проверяем текст
+    text = cleanText(text);
+    
+    if (text.length < 50) {
+      return res.status(400).json({ 
+        error: 'Текст слишком короткий. Минимум 50 символов.' 
+      });
+    }
+
     // Вызываем Groq API
-    const userMessage = `Проверь этот документ на соответствие законам РФ:\n\n${text}`;
+    const userMessage = `Проверь документ на compliance с законами РФ:\n\n${text}`;
     const aiResponse = await callGroqAPI(userMessage);
 
     res.json({
@@ -241,7 +261,7 @@ app.post('/api/check-document', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ошибка при проверке документа:', error);
+    console.error('Ошибка при проверке:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Неизвестная ошибка',
@@ -251,7 +271,7 @@ app.post('/api/check-document', async (req, res) => {
 
 // Запуск сервера
 app.listen(PORT, () => {
-  console.log(`🚀 AI Lawyer API (Groq) запущен на порту ${PORT}`);
-  console.log(`🔑 Groq API Key: ${GROQ_API_KEY ? 'установлен' : 'НЕ УСТАНОВЛЕН!'}`);
-  console.log(`✅ Health check: http://localhost:${PORT}/health`);
+  console.log(`🚀 AI Lawyer API (Groq) на порту ${PORT}`);
+  console.log(`🔑 API Key: ${GROQ_API_KEY ? '✅ установлен' : '❌ НЕ УСТАНОВЛЕН'}`);
+  console.log(`✅ Health: http://localhost:${PORT}/health`);
 });
