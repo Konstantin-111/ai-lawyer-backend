@@ -1,7 +1,9 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
+const https = require('https');
+const http = require('http');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,118 +14,179 @@ app.use(express.json());
 
 // OpenAI клиент
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ID ассистента (создашь на platform.openai.com)
 const ASSISTANT_ID = process.env.ASSISTANT_ID;
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Основной endpoint проверки документа
-app.post('/api/check', async (req, res) => {
-    try {
-        const { text, userId } = req.body;
-
-        if (!text || text.length < 100) {
-            return res.status(400).json({ 
-                error: 'Текст слишком короткий. Минимум 100 символов.' 
-            });
+// Функция парсинга сайта
+async function fetchWebsiteContent(url) {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith('https') ? https : http;
+    
+    protocol.get(url, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        // Простой парсинг: убираем HTML теги и берем текст
+        const text = data
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        // Ищем ключевые секции
+        const sections = [];
+        
+        // Оферта
+        const offerMatch = text.match(/.{0,200}(оферта|публичная оферта|договор оферты).{0,2000}/i);
+        if (offerMatch) sections.push('ОФЕРТА:\n' + offerMatch[0]);
+        
+        // Политика конфиденциальности
+        const privacyMatch = text.match(/.{0,200}(политика конфиденциальности|обработка персональных данных|защита данных).{0,2000}/i);
+        if (privacyMatch) sections.push('ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ:\n' + privacyMatch[0]);
+        
+        // Условия возврата
+        const returnMatch = text.match(/.{0,200}(возврат|обмен|гарантия|возврат средств).{0,1000}/i);
+        if (returnMatch) sections.push('УСЛОВИЯ ВОЗВРАТА:\n' + returnMatch[0]);
+        
+        if (sections.length > 0) {
+          resolve(sections.join('\n\n'));
+        } else {
+          // Если ничего не нашли, берем первые 3000 символов
+          resolve(text.substring(0, 3000));
         }
+      });
+    }).on('error', (err) => {
+      reject(err);
+    });
+  });
+}
 
-        console.log(`[${new Date().toISOString()}] Начало проверки для пользователя ${userId}`);
+// Главный endpoint для проверки документов
+app.post('/api/check-document', async (req, res) => {
+  try {
+    let { text, userId } = req.body;
 
-        // 1. Создаем Thread
-        const thread = await openai.beta.threads.create();
-        console.log(`Thread создан: ${thread.id}`);
-
-        // 2. Добавляем сообщение пользователя
-        await openai.beta.threads.messages.create(thread.id, {
-            role: 'user',
-            content: `Проанализируй следующий документ на соответствие законодательству РФ:\n\n${text}`
-        });
-
-        // 3. Запускаем ассистента
-        const run = await openai.beta.threads.runs.create(thread.id, {
-            assistant_id: ASSISTANT_ID
-        });
-        console.log(`Run запущен: ${run.id}`);
-
-        // 4. Ждем завершения (polling)
-        let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-        let attempts = 0;
-        const maxAttempts = 60; // максимум 60 секунд
-
-        while (runStatus.status !== 'completed' && attempts < maxAttempts) {
-            if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
-                throw new Error(`Run завершился со статусом: ${runStatus.status}`);
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 1000)); // ждем 1 секунду
-            runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-            attempts++;
-            
-            if (attempts % 5 === 0) {
-                console.log(`Ожидание... статус: ${runStatus.status} (${attempts}s)`);
-            }
-        }
-
-        if (runStatus.status !== 'completed') {
-            throw new Error('Превышено время ожидания ответа AI');
-        }
-
-        console.log('Run завершен успешно');
-
-        // 5. Получаем ответ
-        const messages = await openai.beta.threads.messages.list(thread.id);
-        const lastMessage = messages.data[0];
-        const result = lastMessage.content[0].text.value;
-
-        console.log(`Результат получен, длина: ${result.length} символов`);
-
-        // Возвращаем результат
-        res.json({
-            success: true,
-            result: result,
-            threadId: thread.id
-        });
-
-    } catch (error) {
-        console.error('Ошибка при проверке документа:', error);
-        res.status(500).json({ 
-            error: 'Ошибка при обработке запроса',
-            details: error.message 
-        });
+    if (!text) {
+      return res.status(400).json({ error: 'Текст документа обязателен' });
     }
+
+    console.log(`[${new Date().toISOString()}] Проверка документа для пользователя: ${userId}`);
+
+    // Если передан URL сайта, парсим его
+    if (text.startsWith('URL: ')) {
+      const url = text.replace('URL: ', '').trim();
+      console.log(`Парсинг сайта: ${url}`);
+      
+      try {
+        text = await fetchWebsiteContent(url);
+        console.log(`Извлечено ${text.length} символов с сайта`);
+      } catch (error) {
+        console.error('Ошибка парсинга сайта:', error);
+        return res.status(400).json({ 
+          error: 'Не удалось загрузить содержимое сайта. Проверьте URL.' 
+        });
+      }
+    }
+
+    // Создаем thread
+    const thread = await openai.beta.threads.create();
+
+    // Добавляем сообщение пользователя
+    await openai.beta.threads.messages.create(thread.id, {
+      role: 'user',
+      content: `Проверь этот документ на соответствие законам РФ:\n\n${text}`,
+    });
+
+    // Запускаем Assistant
+    const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+      assistant_id: ASSISTANT_ID,
+    });
+
+    // Проверяем статус
+    if (run.status === 'completed') {
+      // Получаем ответ
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      const assistantMessage = messages.data.find(
+        (msg) => msg.role === 'assistant'
+      );
+
+      if (assistantMessage) {
+        const response = assistantMessage.content[0].text.value;
+
+        res.json({
+          success: true,
+          result: response,
+          threadId: thread.id,
+        });
+      } else {
+        throw new Error('Ответ Assistant не найден');
+      }
+    } else {
+      throw new Error(`Run завершился со статусом: ${run.status}`);
+    }
+  } catch (error) {
+    console.error('Ошибка при проверке документа:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
 });
 
-// Endpoint для создания платежа (для будущего)
-app.post('/api/create-payment', async (req, res) => {
-    try {
-        const { userId, amount } = req.body;
-        
-        // TODO: Интеграция с YooKassa
-        // Логика как в Lucky Style
-        
-        res.json({
-            success: true,
-            paymentUrl: 'https://yookassa.ru/...',
-            message: 'Платежная ссылка создана'
-        });
-    } catch (error) {
-        console.error('Ошибка создания платежа:', error);
-        res.status(500).json({ error: 'Ошибка создания платежа' });
-    }
+// Endpoint для проверки статуса Assistant
+app.get('/api/assistant/status', async (req, res) => {
+  try {
+    const assistant = await openai.beta.assistants.retrieve(ASSISTANT_ID);
+    res.json({
+      success: true,
+      assistant: {
+        id: assistant.id,
+        name: assistant.name,
+        model: assistant.model,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Обработка платежей YooKassa (webhook)
+app.post('/api/payment/webhook', async (req, res) => {
+  try {
+    const notification = req.body;
+    
+    console.log('Получен webhook от YooKassa:', notification);
+
+    // Здесь добавь логику обработки платежа:
+    // 1. Проверь подпись
+    // 2. Обнови статус заказа в БД
+    // 3. Отправь уведомление пользователю
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Ошибка обработки webhook:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Запуск сервера
 app.listen(PORT, () => {
-    console.log(`🚀 AI Lawyer API запущен на порту ${PORT}`);
-    console.log(`📡 Health check: http://localhost:${PORT}/health`);
-    console.log(`🤖 OpenAI Assistant ID: ${ASSISTANT_ID}`);
+  console.log(`🚀 AI Lawyer API запущен на порту ${PORT}`);
+  console.log(`📋 Assistant ID: ${ASSISTANT_ID}`);
+  console.log(`✅ Health check: http://localhost:${PORT}/health`);
 });
-
-module.exports = app;
