@@ -12,9 +12,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// OpenAI клиент
+// OpenAI клиент с поддержкой Assistants v2
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  defaultHeaders: {
+    'OpenAI-Beta': 'assistants=v2'
+  }
 });
 
 const ASSISTANT_ID = process.env.ASSISTANT_ID;
@@ -27,10 +30,26 @@ app.get('/health', (req, res) => {
 // Функция парсинга сайта
 async function fetchWebsiteContent(url) {
   return new Promise((resolve, reject) => {
+    // Добавляем http:// если не указан протокол
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+
     const protocol = url.startsWith('https') ? https : http;
     
-    protocol.get(url, (res) => {
+    const options = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    };
+    
+    protocol.get(url, options, (res) => {
       let data = '';
+      
+      // Следуем за редиректами
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return fetchWebsiteContent(res.headers.location).then(resolve).catch(reject);
+      }
       
       res.on('data', (chunk) => {
         data += chunk;
@@ -49,22 +68,22 @@ async function fetchWebsiteContent(url) {
         const sections = [];
         
         // Оферта
-        const offerMatch = text.match(/.{0,200}(оферта|публичная оферта|договор оферты).{0,2000}/i);
-        if (offerMatch) sections.push('ОФЕРТА:\n' + offerMatch[0]);
+        const offerMatch = text.match(/.{0,300}(оферта|публичная оферта|договор оферты|пользовательское соглашение).{0,3000}/i);
+        if (offerMatch) sections.push('ОФЕРТА/СОГЛАШЕНИЕ:\n' + offerMatch[0]);
         
         // Политика конфиденциальности
-        const privacyMatch = text.match(/.{0,200}(политика конфиденциальности|обработка персональных данных|защита данных).{0,2000}/i);
-        if (privacyMatch) sections.push('ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ:\n' + privacyMatch[0]);
+        const privacyMatch = text.match(/.{0,300}(политика конфиденциальности|обработка персональных данных|защита данных|согласие на обработку).{0,3000}/i);
+        if (privacyMatch) sections.push('\n\nПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ:\n' + privacyMatch[0]);
         
         // Условия возврата
-        const returnMatch = text.match(/.{0,200}(возврат|обмен|гарантия|возврат средств).{0,1000}/i);
-        if (returnMatch) sections.push('УСЛОВИЯ ВОЗВРАТА:\n' + returnMatch[0]);
+        const returnMatch = text.match(/.{0,300}(возврат|обмен|гарантия|возврат средств|условия возврата).{0,1500}/i);
+        if (returnMatch) sections.push('\n\nУСЛОВИЯ ВОЗВРАТА:\n' + returnMatch[0]);
         
         if (sections.length > 0) {
-          resolve(sections.join('\n\n'));
+          resolve(sections.join('\n'));
         } else {
-          // Если ничего не нашли, берем первые 3000 символов
-          resolve(text.substring(0, 3000));
+          // Если ничего не нашли, берем первые 4000 символов
+          resolve('СОДЕРЖИМОЕ САЙТА:\n' + text.substring(0, 4000));
         }
       });
     }).on('error', (err) => {
@@ -92,10 +111,16 @@ app.post('/api/check-document', async (req, res) => {
       try {
         text = await fetchWebsiteContent(url);
         console.log(`Извлечено ${text.length} символов с сайта`);
+        
+        if (text.length < 100) {
+          return res.status(400).json({ 
+            error: 'На сайте слишком мало текста. Попробуйте другой URL или вставьте текст вручную.' 
+          });
+        }
       } catch (error) {
         console.error('Ошибка парсинга сайта:', error);
         return res.status(400).json({ 
-          error: 'Не удалось загрузить содержимое сайта. Проверьте URL.' 
+          error: 'Не удалось загрузить содержимое сайта. Проверьте URL или попробуйте вставить текст вручную.' 
         });
       }
     }
@@ -109,7 +134,7 @@ app.post('/api/check-document', async (req, res) => {
       content: `Проверь этот документ на соответствие законам РФ:\n\n${text}`,
     });
 
-    // Запускаем Assistant
+    // Запускаем Assistant с поддержкой v2 API
     const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
       assistant_id: ASSISTANT_ID,
     });
@@ -133,6 +158,8 @@ app.post('/api/check-document', async (req, res) => {
       } else {
         throw new Error('Ответ Assistant не найден');
       }
+    } else if (run.status === 'failed') {
+      throw new Error(`Assistant failed: ${run.last_error?.message || 'Unknown error'}`);
     } else {
       throw new Error(`Run завершился со статусом: ${run.status}`);
     }
@@ -162,25 +189,6 @@ app.get('/api/assistant/status', async (req, res) => {
       success: false,
       error: error.message,
     });
-  }
-});
-
-// Обработка платежей YooKassa (webhook)
-app.post('/api/payment/webhook', async (req, res) => {
-  try {
-    const notification = req.body;
-    
-    console.log('Получен webhook от YooKassa:', notification);
-
-    // Здесь добавь логику обработки платежа:
-    // 1. Проверь подпись
-    // 2. Обнови статус заказа в БД
-    // 3. Отправь уведомление пользователю
-
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Ошибка обработки webhook:', error);
-    res.status(500).json({ error: error.message });
   }
 });
 
