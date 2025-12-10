@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Юрист РФ - Проверка документов</title>
+    <title>AI Юрист РФ - Полный отчет</title>
     <style>
         * {
             margin: 0;
@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -32,11 +32,6 @@
         .header h1 {
             font-size: 48px;
             margin-bottom: 10px;
-        }
-
-        .header p {
-            font-size: 18px;
-            opacity: 0.9;
         }
 
         .card {
@@ -78,17 +73,6 @@
             display: block;
         }
 
-        .input-group {
-            margin-bottom: 20px;
-        }
-
-        .input-group label {
-            display: block;
-            margin-bottom: 10px;
-            font-weight: 600;
-            color: #333;
-        }
-
         textarea, input[type="text"] {
             width: 100%;
             padding: 15px;
@@ -104,17 +88,6 @@
             min-height: auto;
         }
 
-        textarea:focus, input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .hint {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-
         .btn {
             width: 100%;
             padding: 18px;
@@ -124,6 +97,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            margin-top: 15px;
         }
 
         .btn-primary {
@@ -131,154 +105,20 @@
             color: white;
         }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .result {
-            display: none;
-            margin-top: 30px;
-        }
-
-        .result.show {
-            display: block;
-        }
-
-        .result-free {
-            background: #f8f9fa;
-            padding: 30px;
-            border-radius: 15px;
-            border-left: 5px solid #dc3545;
-        }
-
-        .result-free h3 {
-            color: #dc3545;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .stat-box {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-        }
-
-        .stat-number {
-            font-size: 32px;
-            font-weight: 700;
-            color: #667eea;
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            font-size: 14px;
-            color: #666;
-        }
-
-        .risk-level {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 14px;
-            margin-top: 15px;
-        }
-
-        .risk-critical {
-            background: #dc3545;
-            color: white;
-        }
-
-        .risk-high {
-            background: #ffc107;
-            color: #000;
-        }
-
-        .risk-medium {
+        .btn-secondary {
             background: #28a745;
             color: white;
         }
 
-        .upsell {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 25px;
-            border-radius: 15px;
-            margin-top: 20px;
-            text-align: center;
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
 
-        .upsell h4 {
-            font-size: 20px;
-            margin-bottom: 15px;
-        }
-
-        .upsell ul {
-            list-style: none;
-            margin: 15px 0;
-            text-align: left;
-        }
-
-        .upsell li {
-            padding: 8px 0;
-            padding-left: 25px;
-            position: relative;
-        }
-
-        .upsell li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            font-weight: bold;
-        }
-
-        .btn-upsell {
-            background: white;
-            color: #667eea;
-            margin-top: 15px;
-        }
-
-        .result-basic {
-            background: #f8f9fa;
-            padding: 30px;
-            border-radius: 15px;
-        }
-
-        .violation {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border-left: 4px solid #dc3545;
-        }
-
-        .violation h4 {
-            color: #dc3545;
-            margin-bottom: 10px;
-        }
-
-        .violation-detail {
-            margin: 10px 0;
-            font-size: 14px;
-        }
-
-        .violation-detail strong {
-            color: #333;
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .loading {
@@ -306,6 +146,245 @@
             100% { transform: rotate(360deg); }
         }
 
+        .result {
+            display: none;
+        }
+
+        .result.show {
+            display: block;
+        }
+
+        /* Стили для полного отчета */
+        .report-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .report-header h2 {
+            font-size: 32px;
+            margin-bottom: 15px;
+        }
+
+        .context-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .context-info h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .context-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .context-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .context-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .context-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .violations-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .violation {
+            background: white;
+            border-left: 5px solid #dc3545;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .violation.category-high {
+            border-left-color: #ffc107;
+        }
+
+        .violation.category-medium {
+            border-left-color: #28a745;
+        }
+
+        .violation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+
+        .violation-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #dc3545;
+            flex: 1;
+        }
+
+        .violation-category {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .category-critical {
+            background: #dc3545;
+            color: white;
+        }
+
+        .category-high {
+            background: #ffc107;
+            color: #000;
+        }
+
+        .category-medium {
+            background: #28a745;
+            color: white;
+        }
+
+        .violation-detail {
+            margin: 12px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .violation-detail:before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 7px;
+            width: 16px;
+            height: 16px;
+            background-size: contain;
+        }
+
+        .quote:before { content: "📜"; position: absolute; left: 0; }
+        .law:before { content: "⚖️"; position: absolute; left: 0; }
+        .fine:before { content: "💰"; position: absolute; left: 0; }
+        .recommendation:before { content: "🔧"; position: absolute; left: 0; }
+
+        .violation-detail strong {
+            color: #333;
+        }
+
+        .quote-text {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            font-style: italic;
+            margin-top: 5px;
+            display: inline-block;
+        }
+
+        .law-text {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 5px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .total-risk {
+            background: #dc3545;
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .total-risk h3 {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        .risk-amount {
+            font-size: 36px;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+
+        .disclaimer {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+
+        .disclaimer h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .disclaimer p {
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .premium-upsell {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .premium-upsell h3 {
+            font-size: 28px;
+            margin-bottom: 15px;
+        }
+
+        .premium-upsell ul {
+            list-style: none;
+            margin: 20px 0;
+        }
+
+        .premium-upsell li {
+            padding: 8px 0;
+            font-size: 16px;
+        }
+
+        .premium-upsell li:before {
+            content: "✓ ";
+            font-weight: bold;
+        }
+
+        .btn-premium {
+            background: white;
+            color: #28a745;
+            margin-top: 20px;
+        }
+
         .error {
             background: #dc3545;
             color: white;
@@ -324,7 +403,7 @@
     <div class="container">
         <div class="header">
             <h1>⚖️ AI Юрист РФ</h1>
-            <p>Проверка документов на соответствие законам за 2-3 минуты</p>
+            <p>Профессиональная проверка документов с враждебным анализом</p>
         </div>
 
         <div class="card">
@@ -334,33 +413,31 @@
             </div>
 
             <div id="tab-text" class="tab-content active">
-                <div class="input-group">
-                    <label>Вставьте текст документа для проверки:</label>
-                    <textarea id="documentText" placeholder="ДОГОВОР ОФЕРТЫ
+                <label><strong>Вставьте текст документа:</strong></label>
+                <textarea id="documentText" placeholder="ДОГОВОР ОФЕРТЫ
 
 1. Общие положения
 2. Условия использования
-3. ..."></textarea>
-                    <div class="hint">Проверяем: ФЗ-152 (ПДн), ЗоЗПП, ФЗ-38 (Реклама), ГК РФ</div>
-                </div>
+..."></textarea>
             </div>
 
             <div id="tab-url" class="tab-content">
-                <div class="input-group">
-                    <label>Укажите адрес сайта:</label>
-                    <input type="text" id="documentUrl" placeholder="example.com">
-                    <div class="hint">AI автоматически найдёт и проверит оферту, политику конфиденциальности</div>
-                </div>
+                <label><strong>Укажите адрес сайта:</strong></label>
+                <input type="text" id="documentUrl" placeholder="example.com">
             </div>
 
-            <button class="btn btn-primary" onclick="checkDocument()" id="checkBtn">
+            <button class="btn btn-primary" onclick="checkFree()" id="checkFreeBtn">
                 🔍 Бесплатная экспресс-проверка
+            </button>
+
+            <button class="btn btn-secondary" onclick="checkBasic()" id="checkBasicBtn" style="display:none;">
+                💼 Получить полный отчёт — 1,990₽
             </button>
 
             <div class="loading" id="loading">
                 <div class="spinner"></div>
                 <p><strong>Анализируем документ...</strong></p>
-                <p id="loadingStage">🔴 Этап 1/3: Инспектор ищет нарушения...</p>
+                <p id="loadingStage">Пожалуйста, подождите 2-3 минуты</p>
             </div>
 
             <div class="error" id="error"></div>
@@ -372,6 +449,7 @@
     <script>
         const BACKEND_URL = 'https://ai-lawyer-backend-n121.onrender.com';
         let currentTab = 'text';
+        let currentText = '';
 
         function switchTab(tab) {
             currentTab = tab;
@@ -387,7 +465,7 @@
             }
         }
 
-        async function checkDocument() {
+        async function checkFree() {
             const text = currentTab === 'text' 
                 ? document.getElementById('documentText').value.trim()
                 : 'URL: ' + document.getElementById('documentUrl').value.trim();
@@ -397,58 +475,83 @@
                 return;
             }
 
-            // UI состояние
-            document.getElementById('checkBtn').disabled = true;
+            currentText = text;
+
+            document.getElementById('checkFreeBtn').disabled = true;
             document.getElementById('loading').classList.add('show');
             document.getElementById('result').classList.remove('show');
             document.getElementById('error').classList.remove('show');
 
-            // Имитация этапов для UI
-            let stage = 1;
-            const stages = [
-                '🔴 Этап 1/3: Инспектор ищет нарушения...',
-                '⚖️ Этап 2/3: Адвокат проверяет защиту...',
-                '⚔️ Этап 3/3: Судья выносит вердикт...'
-            ];
-            
-            const stageInterval = setInterval(() => {
-                if (stage < stages.length) {
-                    document.getElementById('loadingStage').textContent = stages[stage];
-                    stage++;
-                }
-            }, 40000); // Каждые 40 секунд
-
             try {
                 const response = await fetch(`${BACKEND_URL}/api/check-free`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text })
                 });
 
-                clearInterval(stageInterval);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const data = await response.json();
 
                 if (data.success) {
                     displayFreeResult(data.data);
+                    document.getElementById('checkBasicBtn').style.display = 'block';
                 } else {
                     throw new Error(data.error || 'Ошибка проверки');
                 }
 
             } catch (error) {
-                clearInterval(stageInterval);
                 console.error('Error:', error);
-                document.getElementById('error').textContent = 
-                    '❌ Ошибка: ' + error.message + '. Попробуйте ещё раз или обратитесь в поддержку.';
+                document.getElementById('error').textContent = '❌ Ошибка: ' + error.message;
                 document.getElementById('error').classList.add('show');
             } finally {
-                document.getElementById('checkBtn').disabled = false;
+                document.getElementById('checkFreeBtn').disabled = false;
+                document.getElementById('loading').classList.remove('show');
+            }
+        }
+
+        async function checkBasic() {
+            if (!currentText) {
+                alert('Сначала проведите бесплатную проверку');
+                return;
+            }
+
+            // В реальной версии здесь будет оплата через YooKassa
+            if (!confirm('Получить полный отчёт за 1,990₽?\n\n(В демо-версии оплата отключена)')) {
+                return;
+            }
+
+            document.getElementById('checkBasicBtn').disabled = true;
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('result').classList.remove('show');
+            document.getElementById('error').classList.remove('show');
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/check-basic`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        text: currentText,
+                        paymentId: 'demo_payment_' + Date.now()
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayBasicResult(data.data);
+                } else {
+                    throw new Error(data.error || 'Ошибка проверки');
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('error').textContent = '❌ Ошибка: ' + error.message;
+                document.getElementById('error').classList.add('show');
+            } finally {
+                document.getElementById('checkBasicBtn').disabled = false;
                 document.getElementById('loading').classList.remove('show');
             }
         }
@@ -458,55 +561,193 @@
                              data.level === 'ВЫСОКИЙ' ? 'risk-high' : 'risk-medium';
 
             const html = `
-                <div class="result-free">
-                    <h3>🚨 ЭКСПРЕСС-АНАЛИЗ ЗАВЕРШЁН</h3>
+                <div style="background: #f8f9fa; padding: 30px; border-radius: 15px;">
+                    <h3 style="color: #dc3545; margin-bottom: 20px;">🚨 ЭКСПРЕСС-АНАЛИЗ ЗАВЕРШЁН</h3>
                     
-                    <div class="stats">
-                        <div class="stat-box">
-                            <div class="stat-number">${data.found}</div>
-                            <div class="stat-label">Найдено нарушений</div>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <div style="font-size: 48px; font-weight: 700; color: #667eea; margin-bottom: 10px;">
+                            ${data.found}
                         </div>
-                        <div class="stat-box">
-                            <div class="stat-number">${data.breakdown.critical}</div>
-                            <div class="stat-label">Критических</div>
-                        </div>
+                        <div style="font-size: 18px; color: #666;">нарушений найдено</div>
                     </div>
 
                     <div style="text-align: center; margin: 20px 0;">
                         <strong style="font-size: 18px;">💰 ВОЗМОЖНЫЕ ШТРАФЫ:</strong><br>
-                        <span style="font-size: 24px; color: #dc3545; font-weight: 700;">
+                        <span style="font-size: 28px; color: #dc3545; font-weight: 700; display: block; margin: 10px 0;">
                             ${data.riskIP}
-                        </span> (для ИП)<br>
-                        <span style="font-size: 24px; color: #dc3545; font-weight: 700;">
+                        </span>
+                        <span style="font-size: 14px;">(для ИП)</span><br>
+                        <span style="font-size: 28px; color: #dc3545; font-weight: 700; display: block; margin: 10px 0;">
                             ${data.riskOOO}
-                        </span> (для ООО)
+                        </span>
+                        <span style="font-size: 14px;">(для ООО)</span>
                     </div>
 
-                    <div style="text-align: center;">
-                        <span class="risk-level ${riskClass}">
+                    <div style="text-align: center; margin: 20px 0;">
+                        <span style="display: inline-block; padding: 10px 20px; border-radius: 20px; font-weight: 600; font-size: 16px;" class="${riskClass}">
                             ⚠️ УРОВЕНЬ РИСКА: ${data.level}
                         </span>
                     </div>
 
-                    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 10px;">
-                        <strong>🔴 Критических:</strong> ${data.breakdown.critical} | 
-                        <strong>🟡 Высоких:</strong> ${data.breakdown.high} | 
-                        <strong>🟢 Средних:</strong> ${data.breakdown.medium}
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 20px 0;">
+                        🔴 Критических: ${data.breakdown.critical} | 
+                        🟡 Высоких: ${data.breakdown.high} | 
+                        🟢 Средних: ${data.breakdown.medium}
                     </div>
 
-                    <div class="upsell">
-                        <h4>💼 Хотите узнать подробности?</h4>
-                        <p>Получите полный отчёт с:</p>
-                        <ul>
-                            <li>Списком всех нарушений</li>
-                            <li>Точными ссылками на законы</li>
-                            <li>Размерами штрафов</li>
-                            <li>Конкретными рекомендациями</li>
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-top: 25px; text-align: center;">
+                        <h4 style="font-size: 22px; margin-bottom: 15px;">💼 Хотите узнать подробности?</h4>
+                        <p style="margin-bottom: 15px;">Полный отчёт включает:</p>
+                        <ul style="list-style: none; margin: 15px 0; text-align: left;">
+                            <li style="padding: 8px 0;">✓ Список всех нарушений с цитатами</li>
+                            <li style="padding: 8px 0;">✓ Точные ссылки на статьи законов</li>
+                            <li style="padding: 8px 0;">✓ Тексты из законов из Vector Store</li>
+                            <li style="padding: 8px 0;">✓ Размеры штрафов для ИП и ООО</li>
+                            <li style="padding: 8px 0;">✓ Конкретные рекомендации по исправлению</li>
                         </ul>
-                        <button class="btn btn-upsell" onclick="alert('💳 Оплата будет доступна в следующей версии!')">
-                            Получить полный отчёт — 1,990₽
-                        </button>
+                        <p style="font-size: 14px; opacity: 0.9;">⚡ 3-этапная враждебная проверка уже завершена!</p>
                     </div>
+                </div>
+            `;
+
+            document.getElementById('result').innerHTML = html;
+            document.getElementById('result').classList.add('show');
+        }
+
+        function displayBasicResult(data) {
+            let html = `
+                <div class="report-header">
+                    <h2>📊 ПОЛНЫЙ COMPLIANCE ОТЧЁТ</h2>
+                    <p>Дата анализа: ${new Date(data.timestamp).toLocaleString('ru-RU')}</p>
+                    <p>Версия: ${data.version}</p>
+                </div>
+
+                <div class="context-info">
+                    <h3>🏢 КОНТЕКСТ БИЗНЕСА</h3>
+                    <div class="context-grid">
+                        <div class="context-item">
+                            <div class="context-label">Юридическая форма</div>
+                            <div class="context-value">${data.context.jurForm || 'Не определено'}</div>
+                        </div>
+                        <div class="context-item">
+                            <div class="context-label">Тип бизнеса</div>
+                            <div class="context-value">${data.context.businessType || 'Не определено'}</div>
+                        </div>
+                        <div class="context-item">
+                            <div class="context-label">Аудитория</div>
+                            <div class="context-value">${data.context.audience || 'Не определено'}</div>
+                        </div>
+                    </div>
+                    ${data.context.notes ? `<p style="margin-top: 15px; color: #666;"><em>${data.context.notes}</em></p>` : ''}
+                </div>
+
+                <div class="violations-section">
+                    <h3 class="section-title">🚨 ПОДТВЕРЖДЁННЫЕ НАРУШЕНИЯ (${data.violations.length})</h3>
+            `;
+
+            data.violations.forEach((v, index) => {
+                const categoryClass = v.category === '🔴' ? 'critical' : 
+                                     v.category === '🟡' ? 'high' : 'medium';
+                const categoryText = v.category === '🔴' ? 'КРИТИЧЕСКОЕ' : 
+                                    v.category === '🟡' ? 'ВЫСОКОЕ' : 'СРЕДНЕЕ';
+
+                html += `
+                    <div class="violation category-${categoryClass}">
+                        <div class="violation-header">
+                            <div class="violation-title">${index + 1}. ${v.title}</div>
+                            <span class="violation-category category-${categoryClass}">
+                                ${v.category} ${categoryText}
+                            </span>
+                        </div>
+
+                        <div class="violation-detail quote">
+                            <strong>Цитата из документа:</strong><br>
+                            <span class="quote-text">"${v.quote}"</span>
+                        </div>
+
+                        <div class="violation-detail law">
+                            <strong>Нарушает:</strong> ${v.law}
+                            ${v.lawText ? `<div class="law-text">📖 Текст закона: "${v.lawText}"</div>` : ''}
+                        </div>
+
+                        <div class="violation-detail fine">
+                            <strong>Штраф:</strong><br>
+                            • Для ИП: <span style="color: #dc3545; font-weight: 700;">${v.fineIP}</span><br>
+                            • Для ООО: <span style="color: #dc3545; font-weight: 700;">${v.fineOOO}</span>
+                        </div>
+
+                        ${v.priority ? `
+                        <div class="violation-detail">
+                            <strong>📈 Приоритет проверяющих:</strong> ${v.priority}
+                        </div>
+                        ` : ''}
+
+                        <div class="violation-detail recommendation">
+                            <strong>Как исправить:</strong> ${v.recommendation}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div>`;
+
+            if (data.rejected && data.rejected.length > 0) {
+                html += `
+                    <div style="background: #d4edda; padding: 20px; border-radius: 10px; margin: 30px 0;">
+                        <h3 style="color: #155724; margin-bottom: 15px;">✅ ОТКЛОНЁННЫЕ ОБВИНЕНИЯ (${data.rejected.length})</h3>
+                `;
+                data.rejected.forEach((r, index) => {
+                    html += `
+                        <div style="margin: 10px 0;">
+                            <strong>${index + 1}. ${r.title}</strong><br>
+                            <em style="color: #155724;">${r.reason}</em>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            html += `
+                <div class="total-risk">
+                    <h3>💰 ОБЩИЙ РИСК ПРИ ПРОВЕРКЕ</h3>
+                    <div>
+                        <div>Для ИП:</div>
+                        <div class="risk-amount">${data.totalRiskIP}</div>
+                    </div>
+                    <div style="margin-top: 20px;">
+                        <div>Для ООО:</div>
+                        <div class="risk-amount">${data.totalRiskOOO}</div>
+                    </div>
+                </div>
+
+                <div class="premium-upsell">
+                    <h3>💎 Не хотите думать над текстами?</h3>
+                    <p>Получите ГОТОВЫЕ ТЕКСТЫ для исправления всех нарушений!</p>
+                    <ul>
+                        <li>Юридически корректные формулировки</li>
+                        <li>Готовы к копипасту в ваш документ</li>
+                        <li>Со ссылками на нормы законов</li>
+                        <li>Указано где именно вставить</li>
+                    </ul>
+                    <button class="btn btn-premium" onclick="alert('💳 Премиум-версия будет доступна после интеграции оплаты!')">
+                        Получить готовые тексты — всего +800₽
+                    </button>
+                </div>
+
+                <div class="disclaimer">
+                    <h4>⚠️ ВАЖНЫЙ DISCLAIMER</h4>
+                    <p>
+                        Этот анализ основан на автоматической проверке документа с использованием ИИ и 
+                        актуальных версий законов РФ через OpenAI Vector Store.
+                    </p>
+                    <p style="margin-top: 10px;">
+                        <strong>Это не замена юридической консультации!</strong> Для юридически значимых решений, 
+                        участия в судебных разбирательствах или ответа на требования контролирующих органов 
+                        необходимо проконсультироваться с квалифицированным юристом.
+                    </p>
+                    <p style="margin-top: 10px;">
+                        Анализ показывает потенциальные риски и не является гарантией отсутствия других нарушений.
+                    </p>
                 </div>
             `;
 
