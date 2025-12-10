@@ -273,6 +273,9 @@ const STEP3_JUDGE = `⚔️ ТЫ — СУДЬЯ по административ�
   "totalRiskOOO": "от XXX,XXX₽ до YYY,YYY,YYY₽"
 }
 
+⚠️ КРИТИЧЕСКИ ВАЖНО: Поле "title" ОБЯЗАТЕЛЬНО для каждого нарушения! 
+НЕ используй поле "description" вместо "title"!
+
 Цель отчета: Показать ВСЕ места, где контролирующие органы могут "зацепиться".`;
 
 // =============================================================================
@@ -282,6 +285,8 @@ const STEP3_JUDGE = `⚔️ ТЫ — СУДЬЯ по административ�
 const PREMIUM_GENERATOR = `💎 ГЕНЕРАТОР ГОТОВЫХ ТЕКСТОВ
 
 Для каждого подтвержденного нарушения создай ГОТОВЫЙ ТЕКСТ для исправления.
+
+⚠️ ВАЖНО: Используй поле "title" из нарушения (НЕ "description")!
 
 ТРЕБОВАНИЯ:
 1. Юридически корректный (со ссылкой на закон)
@@ -667,16 +672,22 @@ function formatBasicReport(analysis) {
     console.log(`    title: "${v.title}"`);
     console.log(`    description: "${v.description}"`);
     
+    // ФИКС: Fallback если AI не заполнил title
+    const displayTitle = v.title || v.description || 'Нарушение закона';
+    const displayDescription = v.description || v.title || '';
+    
     const fine = getFineFromTable(
       v.law || '', 
       v.type || v.category || '', 
-      v.title || v.description || ''
+      displayTitle
     );
     
     const formatNumber = (num) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     
     const result = {
       ...v,
+      title: displayTitle,  // Гарантируем что title всегда есть
+      description: displayDescription,
       fineIP: `от ${formatNumber(fine.ip.min)}₽ до ${formatNumber(fine.ip.max)}₽`,
       fineOOO: `от ${formatNumber(fine.ooo.min)}₽ до ${formatNumber(fine.ooo.max)}₽`
     };
