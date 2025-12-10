@@ -422,6 +422,13 @@ async function hostileAnalysis(documentText) {
   const verdict = parseJSON(step3Response);
   console.log(`✅ Подтверждено нарушений: ${verdict.confirmedViolations.length}`);
   
+  // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для отладки
+  if (verdict.confirmedViolations.length > 0) {
+    console.log('\n🔍 СТРУКТУРА ПЕРВОГО НАРУШЕНИЯ:');
+    console.log(JSON.stringify(verdict.confirmedViolations[0], null, 2));
+    console.log('\nДоступные поля:', Object.keys(verdict.confirmedViolations[0]).join(', '));
+  }
+  
   return {
     context: step1Data.context,
     verdict: verdict
@@ -645,11 +652,21 @@ function formatFreeReport(analysis) {
 }
 
 function formatBasicReport(analysis) {
+  console.log('\n📋 ФОРМАТИРОВАНИЕ БАЗОВОГО ОТЧЁТА...');
+  console.log(`Нарушений для обработки: ${analysis.verdict.confirmedViolations.length}`);
+  
   // СЧИТАЕМ СУММЫ САМИ НА BACKEND!
   const totalRisk = calculateTotalRisk(analysis.verdict.confirmedViolations);
   
   // Добавляем штрафы из таблицы в каждое нарушение
-  const violationsWithFines = analysis.verdict.confirmedViolations.map(v => {
+  const violationsWithFines = analysis.verdict.confirmedViolations.map((v, index) => {
+    console.log(`\n  Обработка нарушения ${index + 1}:`);
+    console.log(`    law: "${v.law}"`);
+    console.log(`    type: "${v.type}"`);
+    console.log(`    category: "${v.category}"`);
+    console.log(`    title: "${v.title}"`);
+    console.log(`    description: "${v.description}"`);
+    
     const fine = getFineFromTable(
       v.law || '', 
       v.type || v.category || '', 
@@ -658,12 +675,18 @@ function formatBasicReport(analysis) {
     
     const formatNumber = (num) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     
-    return {
+    const result = {
       ...v,
       fineIP: `от ${formatNumber(fine.ip.min)}₽ до ${formatNumber(fine.ip.max)}₽`,
       fineOOO: `от ${formatNumber(fine.ooo.min)}₽ до ${formatNumber(fine.ooo.max)}₽`
     };
+    
+    console.log(`    ✅ Добавлены штрафы: ИП=${result.fineIP}, ООО=${result.fineOOO}`);
+    
+    return result;
   });
+  
+  console.log(`\n📊 Итоговые риски: ИП=${totalRisk.ip}, ООО=${totalRisk.ooo}\n`);
   
   return {
     context: analysis.context,
