@@ -20,6 +20,37 @@ const openai = new OpenAI({
 const ASSISTANT_ID = process.env.ASSISTANT_ID;
 
 // =============================================================================
+// 💰 ТАБЛИЦА ШТРАФОВ ИЗ КОАП РФ (фиксированные суммы)
+// =============================================================================
+const FINES_TABLE = {
+  // Статья 13.11 КоАП РФ - Нарушение законодательства о персональных данных
+  'ФЗ-152': {
+    'обработка без согласия': { ip: { min: 10000, max: 20000 }, ooo: { min: 100000, max: 300000 } },
+    'отсутствие политики': { ip: { min: 5000, max: 10000 }, ooo: { min: 30000, max: 50000 } },
+    'нарушение условий обработки': { ip: { min: 10000, max: 20000 }, ooo: { min: 100000, max: 300000 } },
+    'передача третьим лицам': { ip: { min: 10000, max: 20000 }, ooo: { min: 100000, max: 300000 } },
+    'default': { ip: { min: 10000, max: 20000 }, ooo: { min: 100000, max: 300000 } }
+  },
+  
+  // Статья 14.8 КоАП РФ - Нарушение прав потребителей
+  'ЗоЗПП': {
+    'недостоверная информация': { ip: { min: 10000, max: 30000 }, ooo: { min: 100000, max: 500000 } },
+    'отсутствие обязательной информации': { ip: { min: 10000, max: 30000 }, ooo: { min: 100000, max: 500000 } },
+    'нарушение порядка продажи': { ip: { min: 10000, max: 30000 }, ooo: { min: 100000, max: 500000 } },
+    'нарушение сроков возврата': { ip: { min: 10000, max: 30000 }, ooo: { min: 100000, max: 500000 } },
+    'default': { ip: { min: 10000, max: 30000 }, ooo: { min: 100000, max: 500000 } }
+  },
+  
+  // Статья 14.3 КоАП РФ - Нарушение законодательства о рекламе
+  'ФЗ-38': {
+    'недостоверная реклама': { ip: { min: 20000, max: 40000 }, ooo: { min: 500000, max: 1000000 } },
+    'ненадлежащая реклама': { ip: { min: 10000, max: 20000 }, ooo: { min: 100000, max: 500000 } },
+    'нарушение требований': { ip: { min: 10000, max: 20000 }, ooo: { min: 100000, max: 500000 } },
+    'default': { ip: { min: 20000, max: 40000 }, ooo: { min: 500000, max: 1000000 } }
+  }
+};
+
+// =============================================================================
 // ПРОМПТЫ ДЛЯ 3-ЭТАПНОЙ ВРАЖДЕБНОЙ ПРОВЕРКИ
 // =============================================================================
 
@@ -487,6 +518,43 @@ async function fetchWebsiteContent(url) {
 // =============================================================================
 
 // Функция парсинга штрафа из строки
+// =============================================================================
+// ФУНКЦИИ РАБОТЫ СО ШТРАФАМИ
+// =============================================================================
+
+// Получить штраф из таблицы по закону и типу нарушения
+function getFineFromTable(law, violationType, violationTitle) {
+  console.log(`🔍 Ищу штраф для: закон="${law}", тип="${violationType}", title="${violationTitle}"`);
+  
+  // Нормализуем название закона
+  let normalizedLaw = law;
+  if (law.includes('152') || law.toLowerCase().includes('персональн')) {
+    normalizedLaw = 'ФЗ-152';
+  } else if (law.includes('ЗоЗПП') || law.toLowerCase().includes('потребител')) {
+    normalizedLaw = 'ЗоЗПП';
+  } else if (law.includes('38') || law.toLowerCase().includes('реклам')) {
+    normalizedLaw = 'ФЗ-38';
+  }
+  
+  const lawFines = FINES_TABLE[normalizedLaw];
+  if (!lawFines) {
+    console.log(`⚠️ Закон "${normalizedLaw}" не найден в таблице, использую дефолт`);
+    return { ip: { min: 10000, max: 50000 }, ooo: { min: 100000, max: 500000 } };
+  }
+  
+  // Ищем по всем текстам (тип, title, описание)
+  const searchText = `${violationType} ${violationTitle}`.toLowerCase();
+  const violationKey = Object.keys(lawFines).find(key => 
+    searchText.includes(key.toLowerCase()) || key.toLowerCase().includes(violationType.toLowerCase())
+  );
+  
+  const fine = lawFines[violationKey] || lawFines['default'];
+  console.log(`✅ Найден штраф:`, fine);
+  
+  return fine;
+}
+
+// Функция парсинга штрафа из строки (РЕЗЕРВНАЯ, если AI вернёт штрафы)
 function parseFine(fineStr) {
   // "от 10,000₽ до 50,000₽" или "до 50,000₽"
   if (!fineStr) return { min: 0, max: 0 };
@@ -517,20 +585,25 @@ function calculateTotalRisk(violations) {
   console.log('📊 Расчёт суммарных штрафов:');
   
   violations.forEach((v, index) => {
-    const fineIP = parseFine(v.fineIP || '');
-    const fineOOO = parseFine(v.fineOOO || '');
+    // ИСПОЛЬЗУЕМ ТАБЛИЦУ ШТРАФОВ вместо парсинга AI ответа
+    const fine = getFineFromTable(
+      v.law || '', 
+      v.type || v.category || '', 
+      v.title || v.description || ''
+    );
     
-    console.log(`  Нарушение ${index + 1}:`);
-    console.log(`    ИП: от ${fineIP.min} до ${fineIP.max}`);
-    console.log(`    ООО: от ${fineOOO.min} до ${fineOOO.max}`);
+    console.log(`  Нарушение ${index + 1}: ${v.title || v.description}`);
+    console.log(`    Закон: ${v.law}`);
+    console.log(`    ИП: от ${fine.ip.min} до ${fine.ip.max}`);
+    console.log(`    ООО: от ${fine.ooo.min} до ${fine.ooo.max}`);
     
-    totalMinIP += fineIP.min;
-    totalMaxIP += fineIP.max;
-    totalMinOOO += fineOOO.min;
-    totalMaxOOO += fineOOO.max;
+    totalMinIP += fine.ip.min;
+    totalMaxIP += fine.ip.max;
+    totalMinOOO += fine.ooo.min;
+    totalMaxOOO += fine.ooo.max;
   });
   
-  console.log(`  ИТОГО:`);
+  console.log(`  💰 ИТОГО:`);
   console.log(`    ИП: от ${totalMinIP} до ${totalMaxIP}`);
   console.log(`    ООО: от ${totalMinOOO} до ${totalMaxOOO}`);
   
@@ -575,9 +648,26 @@ function formatBasicReport(analysis) {
   // СЧИТАЕМ СУММЫ САМИ НА BACKEND!
   const totalRisk = calculateTotalRisk(analysis.verdict.confirmedViolations);
   
+  // Добавляем штрафы из таблицы в каждое нарушение
+  const violationsWithFines = analysis.verdict.confirmedViolations.map(v => {
+    const fine = getFineFromTable(
+      v.law || '', 
+      v.type || v.category || '', 
+      v.title || v.description || ''
+    );
+    
+    const formatNumber = (num) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    
+    return {
+      ...v,
+      fineIP: `от ${formatNumber(fine.ip.min)}₽ до ${formatNumber(fine.ip.max)}₽`,
+      fineOOO: `от ${formatNumber(fine.ooo.min)}₽ до ${formatNumber(fine.ooo.max)}₽`
+    };
+  });
+  
   return {
     context: analysis.context,
-    violations: analysis.verdict.confirmedViolations,
+    violations: violationsWithFines,
     rejected: analysis.verdict.rejectedViolations,
     totalRiskIP: totalRisk.ip,
     totalRiskOOO: totalRisk.ooo,
