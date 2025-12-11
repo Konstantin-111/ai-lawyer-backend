@@ -617,6 +617,16 @@
         }
 
         function displayBasicResult(data) {
+            console.log('=== displayBasicResult ВЫЗВАНА ===');
+            console.log('data:', data);
+            console.log('violations:', data.violations);
+            
+            if (data.violations && data.violations.length > 0) {
+                console.log('Первое нарушение:', data.violations[0]);
+                console.log('fineIP первого:', data.violations[0].fineIP);
+                console.log('typeof fineIP:', typeof data.violations[0].fineIP);
+            }
+            
             let html = `
                 <div class="report-header">
                     <h2>📊 ПОЛНЫЙ COMPLIANCE ОТЧЁТ</h2>
