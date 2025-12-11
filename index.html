@@ -674,8 +674,8 @@
 
                         <div class="violation-detail fine">
                             <strong>Штраф:</strong><br>
-                            • Для ИП: <span style="color: #dc3545; font-weight: 700;">${v.fineIP}</span><br>
-                            • Для ООО: <span style="color: #dc3545; font-weight: 700;">${v.fineOOO}</span>
+                            • Для ИП: <span style="color: #dc3545; font-weight: 700;">${v.fineIP || 'Уточняется'}</span><br>
+                            • Для ООО: <span style="color: #dc3545; font-weight: 700;">${v.fineOOO || 'Уточняется'}</span>
                         </div>
 
                         ${v.priority ? `
