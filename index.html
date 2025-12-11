@@ -513,6 +513,9 @@
         }
 
         async function checkBasic() {
+            console.log('=== checkBasic ВЫЗВАНА ===');
+            console.log('currentText:', currentText);
+            
             if (!currentText) {
                 alert('Сначала проведите бесплатную проверку');
                 return;
@@ -541,8 +544,14 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const data = await response.json();
+                
+                console.log('=== ПОЛУЧЕН ОТВЕТ ОТ API ===');
+                console.log('Response:', data);
+                console.log('data.success:', data.success);
+                console.log('data.data:', data.data);
 
                 if (data.success) {
+                    console.log('=== ВЫЗЫВАЕМ displayBasicResult ===');
                     displayBasicResult(data.data);
                 } else {
                     throw new Error(data.error || 'Ошибка проверки');
