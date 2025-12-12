@@ -468,11 +468,22 @@ async function runAssistant(userMessage, instructions) {
 function parseJSON(text) {
   try {
     // Убираем markdown code blocks
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(cleaned);
+    let cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    // Пробуем распарсить напрямую
+    try {
+      return JSON.parse(cleaned);
+    } catch (e) {
+      // Если не получилось, ищем JSON в тексте
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      throw e;
+    }
   } catch (error) {
-    console.error('Failed to parse JSON:', text);
-    throw new Error('Invalid JSON response from AI');
+    console.error('Failed to parse JSON. Text was:', text.substring(0, 500));
+    throw new Error('Invalid JSON response from AI: ' + error.message);
   }
 }
 
@@ -808,12 +819,26 @@ function formatBasicReport(analysis) {
 }
 
 async function formatPremiumReport(analysis) {
-  const premiumTexts = await generatePremiumTexts(analysis.verdict.confirmedViolations);
-  
-  return {
-    ...formatBasicReport(analysis),
-    readyTexts: premiumTexts.readyTexts
-  };
+  try {
+    const premiumTexts = await generatePremiumTexts(analysis.verdict.confirmedViolations);
+    
+    // Добавляем readyText к каждому нарушению
+    const violationsWithTexts = analysis.verdict.confirmedViolations.map((v, i) => ({
+      ...v,
+      readyText: premiumTexts.readyTexts?.[i] || null,
+      insertLocation: premiumTexts.insertLocations?.[i] || null
+    }));
+    
+    return {
+      ...formatBasicReport(analysis),
+      violations: violationsWithTexts
+    };
+  } catch (error) {
+    console.error('⚠️ Ошибка генерации готовых текстов:', error.message);
+    
+    // Fallback: возвращаем базовый отчёт без готовых текстов
+    return formatBasicReport(analysis);
+  }
 }
 
 // =============================================================================
