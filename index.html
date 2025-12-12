@@ -696,6 +696,7 @@
                             • Для ИП: <span style="color: #dc3545; font-weight: 700;">${v.fineIP || 'Уточняется'}</span><br>
                             • Для ООО: <span style="color: #dc3545; font-weight: 700;">${v.fineOOO || 'Уточняется'}</span>
                         </div>
+                        ${console.log(`ГЕНЕРИРУЮ HTML ДЛЯ НАРУШЕНИЯ ${index + 1}:`, `fineIP="${v.fineIP}"`, `fineOOO="${v.fineOOO}"`)}
 
                         ${v.priority ? `
                         <div class="violation-detail">
