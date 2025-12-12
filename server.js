@@ -901,18 +901,48 @@ async function formatPremiumReport(analysis) {
         
         const checkResult = parseJSON(checkResponse);
         
+        // Прогоняем через судью чтобы получить подтвержденные нарушения
         if (checkResult.violations && checkResult.violations.length > 0) {
-          console.warn(`   ⚠️ ВНИМАНИЕ: Сгенерированный текст содержит ${checkResult.violations.length} нарушений!`);
-          console.warn(`   Нарушения:`, checkResult.violations.map(v => v.title).join(', '));
+          // Пропускаем через адвоката
+          const lawyerResponse = await runAssistant(
+            `КОНТЕКСТ: ${JSON.stringify(checkResult.context)}\n\nОБВИНЕНИЯ: ${JSON.stringify(checkResult.violations)}`,
+            STEP2_LAWYER
+          );
+          const lawyerData = parseJSON(lawyerResponse);
           
-          // Добавляем предупреждение к тексту
-          violationsWithTexts.push({
-            ...v,
-            readyText: `⚠️ ВНИМАНИЕ: Этот текст требует доработки!\n\n${generatedText}\n\n🔴 Обнаружены потенциальные проблемы: ${checkResult.violations.map(v => v.title).join('; ')}`,
-            insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
-          });
+          // Пропускаем через судью
+          const judgeResponse = await runAssistant(
+            `КОНТЕКСТ: ${JSON.stringify(checkResult.context)}\n\nОБВИНЕНИЯ: ${JSON.stringify(checkResult.violations)}\n\nЗАЩИТА: ${JSON.stringify(lawyerData.defenses)}`,
+            STEP3_JUDGE
+          );
+          const verdict = parseJSON(judgeResponse);
+          
+          // Фильтруем только нарушения СО ШТРАФАМИ
+          const violationsWithFines = verdict.confirmedViolations?.filter(v => 
+            (v.fineIP && v.fineIP !== 'Уточняется') || 
+            (v.fineOOO && v.fineOOO !== 'Уточняется')
+          ) || [];
+          
+          if (violationsWithFines.length > 0) {
+            console.warn(`   ⚠️ ВНИМАНИЕ: Сгенерированный текст содержит ${violationsWithFines.length} нарушений СО ШТРАФАМИ!`);
+            console.warn(`   Нарушения:`, violationsWithFines.map(v => `${v.title} (ИП: ${v.fineIP}, ООО: ${v.fineOOO})`).join(', '));
+            
+            // Добавляем предупреждение к тексту
+            violationsWithTexts.push({
+              ...v,
+              readyText: `⚠️ ВНИМАНИЕ: Этот текст требует доработки!\n\n${generatedText}\n\n🔴 Обнаружены нарушения со штрафами: ${violationsWithFines.map(v => `${v.title} (ИП: ${v.fineIP}, ООО: ${v.fineOOO})`).join('; ')}`,
+              insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
+            });
+          } else {
+            console.log(`   ✅ Текст прошёл проверку! (найдено ${verdict.confirmedViolations?.length || 0} нарушений без штрафов)`);
+            violationsWithTexts.push({
+              ...v,
+              readyText: generatedText,
+              insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
+            });
+          }
         } else {
-          console.log(`   ✅ Текст прошёл проверку!`);
+          console.log(`   ✅ Текст прошёл проверку! (нарушений не найдено)`);
           violationsWithTexts.push({
             ...v,
             readyText: generatedText,
