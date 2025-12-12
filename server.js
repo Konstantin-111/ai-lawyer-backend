@@ -823,11 +823,15 @@ async function formatPremiumReport(analysis) {
     const premiumTexts = await generatePremiumTexts(analysis.verdict.confirmedViolations);
     
     // Добавляем readyText к каждому нарушению
-    const violationsWithTexts = analysis.verdict.confirmedViolations.map((v, i) => ({
-      ...v,
-      readyText: premiumTexts.readyTexts?.[i] || null,
-      insertLocation: premiumTexts.insertLocations?.[i] || null
-    }));
+    const violationsWithTexts = analysis.verdict.confirmedViolations.map((v, i) => {
+      const readyTextObj = premiumTexts.readyTexts?.[i];
+      
+      return {
+        ...v,
+        readyText: typeof readyTextObj === 'object' ? readyTextObj.template : readyTextObj,
+        insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
+      };
+    });
     
     return {
       ...formatBasicReport(analysis),
