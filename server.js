@@ -869,8 +869,8 @@ async function formatPremiumReport(analysis) {
       console.warn(`⚠️ ВНИМАНИЕ: Ожидалось ${violationsCount} текстов, получено ${premiumTexts.readyTexts?.length || 0}`);
     }
     
-    // 🔴 НОВОЕ: Самопроверка сгенерированных текстов
-    console.log('🔍 Запуск самопроверки сгенерированных текстов...');
+    // 🔄 НОВОЕ: Рекурсивное улучшение текстов до идеального состояния
+    console.log('🔄 Запуск рекурсивного улучшения текстов...');
     
     const violationsWithTexts = [];
     
@@ -888,29 +888,39 @@ async function formatPremiumReport(analysis) {
         continue;
       }
       
-      const generatedText = typeof readyTextObj === 'object' ? readyTextObj.template : readyTextObj;
+      let generatedText = typeof readyTextObj === 'object' ? readyTextObj.template : readyTextObj;
+      const insertLocation = typeof readyTextObj === 'object' ? readyTextObj.location : null;
       
-      // Самопроверка: проверяем сгенерированный текст через инспектора
-      try {
-        console.log(`   Проверка текста ${i + 1}/${analysis.verdict.confirmedViolations.length}...`);
+      // Рекурсивное улучшение (максимум 3 итерации)
+      let iteration = 0;
+      const maxIterations = 3;
+      let isTextClean = false;
+      
+      while (iteration < maxIterations && !isTextClean) {
+        iteration++;
+        console.log(`   Итерация ${iteration}/${maxIterations} для нарушения ${i + 1}...`);
         
-        const checkResponse = await runAssistant(
-          `Проанализируй этот исправленный текст:\n\n${generatedText}`,
-          STEP1_INSPECTOR
-        );
-        
-        const checkResult = parseJSON(checkResponse);
-        
-        // Прогоняем через судью чтобы получить подтвержденные нарушения
-        if (checkResult.violations && checkResult.violations.length > 0) {
-          // Пропускаем через адвоката
+        try {
+          // Проверяем текст через все 3 этапа
+          const checkResponse = await runAssistant(
+            `Проанализируй этот исправленный текст:\n\n${generatedText}`,
+            STEP1_INSPECTOR
+          );
+          const checkResult = parseJSON(checkResponse);
+          
+          if (!checkResult.violations || checkResult.violations.length === 0) {
+            console.log(`   ✅ Текст идеален! Нарушений не найдено.`);
+            isTextClean = true;
+            break;
+          }
+          
+          // Прогоняем через адвоката и судью
           const lawyerResponse = await runAssistant(
             `КОНТЕКСТ: ${JSON.stringify(checkResult.context)}\n\nОБВИНЕНИЯ: ${JSON.stringify(checkResult.violations)}`,
             STEP2_LAWYER
           );
           const lawyerData = parseJSON(lawyerResponse);
           
-          // Пропускаем через судью
           const judgeResponse = await runAssistant(
             `КОНТЕКСТ: ${JSON.stringify(checkResult.context)}\n\nОБВИНЕНИЯ: ${JSON.stringify(checkResult.violations)}\n\nЗАЩИТА: ${JSON.stringify(lawyerData.defenses)}`,
             STEP3_JUDGE
@@ -923,44 +933,60 @@ async function formatPremiumReport(analysis) {
             (v.fineOOO && v.fineOOO !== 'Уточняется')
           ) || [];
           
-          if (violationsWithFines.length > 0) {
-            console.warn(`   ⚠️ ВНИМАНИЕ: Сгенерированный текст содержит ${violationsWithFines.length} нарушений СО ШТРАФАМИ!`);
-            console.warn(`   Нарушения:`, violationsWithFines.map(v => `${v.title} (ИП: ${v.fineIP}, ООО: ${v.fineOOO})`).join(', '));
-            
-            // Добавляем предупреждение к тексту
-            violationsWithTexts.push({
-              ...v,
-              readyText: `⚠️ ВНИМАНИЕ: Этот текст требует доработки!\n\n${generatedText}\n\n🔴 Обнаружены нарушения со штрафами: ${violationsWithFines.map(v => `${v.title} (ИП: ${v.fineIP}, ООО: ${v.fineOOO})`).join('; ')}`,
-              insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
-            });
-          } else {
-            console.log(`   ✅ Текст прошёл проверку! (найдено ${verdict.confirmedViolations?.length || 0} нарушений без штрафов)`);
-            violationsWithTexts.push({
-              ...v,
-              readyText: generatedText,
-              insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
-            });
+          if (violationsWithFines.length === 0) {
+            console.log(`   ✅ Текст чист! (${verdict.confirmedViolations?.length || 0} нарушений без штрафов)`);
+            isTextClean = true;
+            break;
           }
-        } else {
-          console.log(`   ✅ Текст прошёл проверку! (нарушений не найдено)`);
-          violationsWithTexts.push({
-            ...v,
-            readyText: generatedText,
-            insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
-          });
+          
+          console.log(`   🔧 Найдено ${violationsWithFines.length} штрафуемых нарушений, улучшаю текст...`);
+          
+          // Просим AI улучшить текст
+          const improvePrompt = `🔧 УЛУЧШИ ЭТОТ ТЕКСТ
+
+ТЕКУЩИЙ ТЕКСТ:
+${generatedText}
+
+ПРОБЛЕМЫ (должны быть исправлены):
+${violationsWithFines.map((vf, idx) => `${idx + 1}. ${vf.title} - ${vf.quote || vf.description}`).join('\n')}
+
+📚 ОБЯЗАТЕЛЬНО используй File Search (Vector Store) для поиска ТОЧНЫХ формулировок!
+
+ЗАДАЧА:
+1. Используй File Search чтобы найти точные требования закона
+2. Добавь ВСЕ недостающие элементы (срок, способ отзыва, реквизиты, цель, перечень данных и т.д.)
+3. Убедись что текст ПОЛНОСТЬЮ соответствует закону
+4. Верни ТОЛЬКО готовый улучшенный текст БЕЗ объяснений и комментариев
+5. НЕ используй [плейсхолдеры] - только конкретные примеры значений
+
+Верни ТОЛЬКО текст, без JSON, без пояснений!`;
+          
+          const improvedResponse = await runAssistant(
+            improvePrompt,
+            'Ты эксперт по российскому законодательству. Твоя задача - улучшить юридический текст чтобы он ПОЛНОСТЬЮ соответствовал закону.'
+          );
+          
+          generatedText = improvedResponse.trim();
+          console.log(`   ✅ Текст улучшен (${generatedText.length} символов)`);
+          
+        } catch (improveError) {
+          console.error(`   ❌ Ошибка улучшения:`, improveError.message);
+          break;
         }
-      } catch (selfCheckError) {
-        console.error(`   ❌ Ошибка самопроверки:`, selfCheckError.message);
-        // В случае ошибки проверки - отдаём текст как есть
-        violationsWithTexts.push({
-          ...v,
-          readyText: generatedText,
-          insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
-        });
       }
+      
+      if (iteration >= maxIterations && !isTextClean) {
+        console.warn(`   ⚠️ Достигнут лимит итераций (${maxIterations}), текст может быть не идеален`);
+      }
+      
+      violationsWithTexts.push({
+        ...v,
+        readyText: generatedText,
+        insertLocation: insertLocation
+      });
     }
     
-    console.log('✅ Самопроверка завершена');
+    console.log('✅ Рекурсивное улучшение завершено');
     
     return {
       ...formatBasicReport(analysis),
