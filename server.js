@@ -563,8 +563,22 @@ async function hostileAnalysis(documentText) {
 async function generatePremiumTexts(violations) {
   console.log('💎 Генерация готовых текстов...');
   
+  const userMessage = `🔍 ЗАДАЧА: Создать юридически корректные готовые тексты для исправления следующих нарушений.
+
+📚 ОБЯЗАТЕЛЬНО: Для КАЖДОГО нарушения используй File Search (Vector Store) чтобы найти ТОЧНУЮ формулировку закона!
+
+НАРУШЕНИЯ (${violations.length} штук):
+${JSON.stringify(violations, null, 2)}
+
+⚠️ КРИТИЧЕСКИ ВАЖНО:
+1. Сгенерируй текст для КАЖДОГО нарушения (всего ${violations.length})
+2. Для каждого нарушения используй File Search чтобы найти точный текст закона
+3. Убедись что твой текст ПОЛНОСТЬЮ соответствует закону из Vector Store
+4. НЕ используй [плейсхолдеры] - используй конкретные примеры значений
+5. Проверь что текст содержит ВСЕ обязательные элементы по закону`;
+  
   const response = await runAssistant(
-    `НАРУШЕНИЯ: ${JSON.stringify(violations)}`,
+    userMessage,
     PREMIUM_GENERATOR
   );
   
@@ -855,20 +869,68 @@ async function formatPremiumReport(analysis) {
       console.warn(`⚠️ ВНИМАНИЕ: Ожидалось ${violationsCount} текстов, получено ${premiumTexts.readyTexts?.length || 0}`);
     }
     
-    // Добавляем readyText к каждому нарушению
-    const violationsWithTexts = analysis.verdict.confirmedViolations.map((v, i) => {
+    // 🔴 НОВОЕ: Самопроверка сгенерированных текстов
+    console.log('🔍 Запуск самопроверки сгенерированных текстов...');
+    
+    const violationsWithTexts = [];
+    
+    for (let i = 0; i < analysis.verdict.confirmedViolations.length; i++) {
+      const v = analysis.verdict.confirmedViolations[i];
       const readyTextObj = premiumTexts.readyTexts?.[i];
       
       if (!readyTextObj) {
         console.warn(`⚠️ Нет готового текста для нарушения ${i + 1}: ${v.title}`);
+        violationsWithTexts.push({
+          ...v,
+          readyText: null,
+          insertLocation: null
+        });
+        continue;
       }
       
-      return {
-        ...v,
-        readyText: typeof readyTextObj === 'object' ? readyTextObj.template : readyTextObj,
-        insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
-      };
-    });
+      const generatedText = typeof readyTextObj === 'object' ? readyTextObj.template : readyTextObj;
+      
+      // Самопроверка: проверяем сгенерированный текст через инспектора
+      try {
+        console.log(`   Проверка текста ${i + 1}/${analysis.verdict.confirmedViolations.length}...`);
+        
+        const checkResponse = await runAssistant(
+          `Проанализируй этот исправленный текст:\n\n${generatedText}`,
+          STEP1_INSPECTOR
+        );
+        
+        const checkResult = parseJSON(checkResponse);
+        
+        if (checkResult.violations && checkResult.violations.length > 0) {
+          console.warn(`   ⚠️ ВНИМАНИЕ: Сгенерированный текст содержит ${checkResult.violations.length} нарушений!`);
+          console.warn(`   Нарушения:`, checkResult.violations.map(v => v.title).join(', '));
+          
+          // Добавляем предупреждение к тексту
+          violationsWithTexts.push({
+            ...v,
+            readyText: `⚠️ ВНИМАНИЕ: Этот текст требует доработки!\n\n${generatedText}\n\n🔴 Обнаружены потенциальные проблемы: ${checkResult.violations.map(v => v.title).join('; ')}`,
+            insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
+          });
+        } else {
+          console.log(`   ✅ Текст прошёл проверку!`);
+          violationsWithTexts.push({
+            ...v,
+            readyText: generatedText,
+            insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
+          });
+        }
+      } catch (selfCheckError) {
+        console.error(`   ❌ Ошибка самопроверки:`, selfCheckError.message);
+        // В случае ошибки проверки - отдаём текст как есть
+        violationsWithTexts.push({
+          ...v,
+          readyText: generatedText,
+          insertLocation: typeof readyTextObj === 'object' ? readyTextObj.location : null
+        });
+      }
+    }
+    
+    console.log('✅ Самопроверка завершена');
     
     return {
       ...formatBasicReport(analysis),
