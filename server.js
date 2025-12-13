@@ -981,6 +981,56 @@ function formatFreeReport(analysis) {
   // СЧИТАЕМ СУММЫ САМИ НА BACKEND! НЕ ДОВЕРЯЕМ AI С МАТЕМАТИКОЙ!
   const totalRisk = calculateTotalRisk(violations);
   
+  // Группируем нарушения по разделам
+  const checkedSections = [];
+  const missingSections = [];
+  
+  // Обрабатываем найденные разделы
+  if (analysis.legalSections && analysis.legalSections.length > 0) {
+    analysis.legalSections.forEach(section => {
+      const sectionViolations = violations.map((v, index) => ({
+        id: index + 1,
+        title: v.title || v.description || 'Нарушение закона',
+        category: v.category,
+        fineIP: v.fineIP || 'Уточняется',
+        fineOOO: v.fineOOO || 'Уточняется'
+      }));
+      
+      checkedSections.push({
+        type: section.type,
+        title: section.title,
+        source: section.source || 'Найдено в документе',
+        violations: sectionViolations
+      });
+    });
+  } else {
+    // Если разделы не найдены - группируем все нарушения в один
+    const allViolations = violations.map((v, index) => ({
+      id: index + 1,
+      title: v.title || v.description || 'Нарушение закона',
+      category: v.category,
+      fineIP: v.fineIP || 'Уточняется',
+      fineOOO: v.fineOOO || 'Уточняется'
+    }));
+    
+    checkedSections.push({
+      type: 'Document',
+      title: 'Проверенный документ',
+      source: 'Весь документ',
+      violations: allViolations
+    });
+  }
+  
+  // Отсутствующие разделы
+  if (analysis.recommendedSections && analysis.recommendedSections.length > 0) {
+    analysis.recommendedSections.forEach(rec => {
+      missingSections.push({
+        title: rec,
+        recommended: true
+      });
+    });
+  }
+  
   return {
     found: violations.length,
     riskIP: totalRisk.ip,
@@ -990,7 +1040,10 @@ function formatFreeReport(analysis) {
       critical,
       high,
       medium
-    }
+    },
+    checkedSections: checkedSections,
+    missingSections: missingSections,
+    upgradePrompt: 'Оплатите детальный отчёт за 1,990₽ чтобы получить цитаты из документа, статьи законов и рекомендации'
   };
 }
 
@@ -1056,8 +1109,11 @@ function formatBasicReport(analysis) {
     rejected: analysis.verdict.rejectedViolations,
     totalRiskIP: totalRisk.ip,
     totalRiskOOO: totalRisk.ooo,
+    checkedSections: analysis.legalSections || [],
+    missingSections: analysis.recommendedSections || [],
     timestamp: new Date().toISOString(),
-    version: 'AI Юрист РФ v2.0'
+    version: 'AI Юрист РФ v2.0',
+    upgradePrompt: 'Получите готовые тексты для исправления за +800₽ (премиум-версия)'
   };
 }
 
