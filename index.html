@@ -572,52 +572,100 @@
             const riskClass = data.level === 'КРИТИЧЕСКИЙ' ? 'risk-critical' : 
                              data.level === 'ВЫСОКИЙ' ? 'risk-high' : 'risk-medium';
 
+            // Генерируем список проверенных разделов
+            let sectionsHTML = '';
+            if (data.checkedSections && data.checkedSections.length > 0) {
+                sectionsHTML = data.checkedSections.map(section => `
+                    <div style="background: white; border: 2px solid #e0e0e0; border-radius: 10px; padding: 20px; margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                            <div>
+                                <h4 style="margin: 0 0 5px 0; color: #333;">📄 ${section.title}</h4>
+                                <p style="margin: 0; color: #666; font-size: 14px;">Источник: ${section.source}</p>
+                            </div>
+                        </div>
+                        ${section.violations && section.violations.length > 0 ? `
+                            <div style="border-top: 1px solid #e0e0e0; padding-top: 15px;">
+                                ${section.violations.map(v => `
+                                    <div style="padding: 10px; background: ${v.category === '🔴' ? '#fff5f5' : v.category === '🟡' ? '#fffbf0' : '#f0fff4'}; border-left: 3px solid ${v.category === '🔴' ? '#dc3545' : v.category === '🟡' ? '#ffc107' : '#28a745'}; margin-bottom: 10px; border-radius: 5px;">
+                                        <div style="font-weight: 600; color: #333; margin-bottom: 5px;">
+                                            ${v.category} Нарушение #${v.id}: ${v.title}
+                                        </div>
+                                        <div style="font-size: 14px; color: #666;">
+                                            💰 Штраф: ИП ${v.fineIP} | ООО ${v.fineOOO}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+
+            // Генерируем список отсутствующих разделов
+            let missingSectionsHTML = '';
+            if (data.missingSections && data.missingSections.length > 0) {
+                missingSectionsHTML = `
+                    <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 10px; padding: 20px; margin-top: 20px;">
+                        <h4 style="margin: 0 0 15px 0; color: #856404;">⚠️ НЕ НАЙДЕНЫ ВАЖНЫЕ РАЗДЕЛЫ:</h4>
+                        ${data.missingSections.map(section => `
+                            <div style="padding: 8px 0; color: #856404;">
+                                📄 ${section.title}
+                            </div>
+                        `).join('')}
+                        <p style="margin-top: 15px; font-size: 14px; color: #856404;">
+                            💡 Эти разделы рекомендуется добавить для полного соответствия законодательству
+                        </p>
+                    </div>
+                `;
+            }
+
             const html = `
                 <div style="background: #f8f9fa; padding: 30px; border-radius: 15px;">
                     <h3 style="color: #dc3545; margin-bottom: 20px;">🚨 ЭКСПРЕСС-АНАЛИЗ ЗАВЕРШЁН</h3>
                     
-                    <div style="text-align: center; margin: 30px 0;">
-                        <div style="font-size: 48px; font-weight: 700; color: #667eea; margin-bottom: 10px;">
-                            ${data.found}
+                    <div style="background: white; padding: 25px; border-radius: 10px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <h4 style="margin: 0 0 15px 0; text-align: center;">⚠️ ИТОГОВЫЕ РИСКИ</h4>
+                        
+                        <div style="text-align: center; margin: 20px 0;">
+                            <strong style="font-size: 18px;">💰 ВОЗМОЖНЫЕ ШТРАФЫ:</strong><br>
+                            <span style="font-size: 32px; color: #dc3545; font-weight: 700; display: block; margin: 10px 0;">
+                                ${data.riskIP}
+                            </span>
+                            <span style="font-size: 14px; color: #666;">(для ИП)</span><br>
+                            <span style="font-size: 32px; color: #dc3545; font-weight: 700; display: block; margin: 10px 0;">
+                                ${data.riskOOO}
+                            </span>
+                            <span style="font-size: 14px; color: #666;">(для ООО)</span>
                         </div>
-                        <div style="font-size: 18px; color: #666;">нарушений найдено</div>
+
+                        <div style="text-align: center; margin: 20px 0;">
+                            <span style="display: inline-block; padding: 10px 20px; border-radius: 20px; font-weight: 600; font-size: 16px;" class="${riskClass}">
+                                ⚠️ УРОВЕНЬ РИСКА: ${data.level}
+                            </span>
+                        </div>
+
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center;">
+                            🔴 Критических: ${data.breakdown.critical} | 
+                            🟡 Высоких: ${data.breakdown.high} | 
+                            🟢 Средних: ${data.breakdown.medium}
+                        </div>
                     </div>
 
-                    <div style="text-align: center; margin: 20px 0;">
-                        <strong style="font-size: 18px;">💰 ВОЗМОЖНЫЕ ШТРАФЫ:</strong><br>
-                        <span style="font-size: 28px; color: #dc3545; font-weight: 700; display: block; margin: 10px 0;">
-                            ${data.riskIP}
-                        </span>
-                        <span style="font-size: 14px;">(для ИП)</span><br>
-                        <span style="font-size: 28px; color: #dc3545; font-weight: 700; display: block; margin: 10px 0;">
-                            ${data.riskOOO}
-                        </span>
-                        <span style="font-size: 14px;">(для ООО)</span>
-                    </div>
+                    <h4 style="margin: 25px 0 15px 0;">✅ ПРОВЕРЕННЫЕ РАЗДЕЛЫ:</h4>
+                    ${sectionsHTML || '<p style="color: #666;">Юридические разделы не найдены. Проверен весь документ.</p>'}
 
-                    <div style="text-align: center; margin: 20px 0;">
-                        <span style="display: inline-block; padding: 10px 20px; border-radius: 20px; font-weight: 600; font-size: 16px;" class="${riskClass}">
-                            ⚠️ УРОВЕНЬ РИСКА: ${data.level}
-                        </span>
-                    </div>
-
-                    <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 20px 0;">
-                        🔴 Критических: ${data.breakdown.critical} | 
-                        🟡 Высоких: ${data.breakdown.high} | 
-                        🟢 Средних: ${data.breakdown.medium}
-                    </div>
+                    ${missingSectionsHTML}
 
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-top: 25px; text-align: center;">
-                        <h4 style="font-size: 22px; margin-bottom: 15px;">💼 Хотите узнать подробности?</h4>
-                        <p style="margin-bottom: 15px;">Полный отчёт включает:</p>
-                        <ul style="list-style: none; margin: 15px 0; text-align: left;">
-                            <li style="padding: 8px 0;">✓ Список всех нарушений с цитатами</li>
+                        <h4 style="font-size: 22px; margin-bottom: 15px;">💎 Хотите узнать подробности?</h4>
+                        <p style="margin-bottom: 15px;">Детальный отчёт включает:</p>
+                        <ul style="list-style: none; margin: 15px 0; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto;">
+                            <li style="padding: 8px 0;">✓ Цитаты из вашего документа</li>
                             <li style="padding: 8px 0;">✓ Точные ссылки на статьи законов</li>
-                            <li style="padding: 8px 0;">✓ Тексты из законов из Vector Store</li>
-                            <li style="padding: 8px 0;">✓ Размеры штрафов для ИП и ООО</li>
-                            <li style="padding: 8px 0;">✓ Конкретные рекомендации по исправлению</li>
+                            <li style="padding: 8px 0;">✓ Тексты законов из Vector Store</li>
+                            <li style="padding: 8px 0;">✓ Подробные рекомендации по исправлению</li>
                         </ul>
-                        <p style="font-size: 14px; opacity: 0.9;">⚡ 3-этапная враждебная проверка уже завершена!</p>
+                        <p style="font-size: 14px; opacity: 0.9; margin-bottom: 20px;">⚡ 3-этапная враждебная проверка уже завершена!</p>
                     </div>
                 </div>
             `;
