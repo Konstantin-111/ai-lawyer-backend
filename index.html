@@ -399,6 +399,153 @@
         .error.show {
             display: block;
         }
+
+        /* Модальное окно заказа документов */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 32px;
+            cursor: pointer;
+            color: #999;
+            background: none;
+            border: none;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .modal-close:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .document-checkbox {
+            display: flex;
+            align-items: start;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .document-checkbox:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .document-checkbox.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+        .document-checkbox input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            margin-right: 15px;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .document-info {
+            flex: 1;
+        }
+
+        .document-price {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            margin-left: 15px;
+            flex-shrink: 0;
+        }
+
+        .package-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .package-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .package-card.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+        .order-summary {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+
+        .btn-order {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-order:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-order:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -601,20 +748,80 @@
                 `).join('');
             }
 
-            // Генерируем список отсутствующих разделов
+            // Генерируем список отсутствующих разделов с детальной информацией
             let missingSectionsHTML = '';
             if (data.missingSections && data.missingSections.length > 0) {
                 missingSectionsHTML = `
-                    <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 10px; padding: 20px; margin-top: 20px;">
-                        <h4 style="margin: 0 0 15px 0; color: #856404;">⚠️ НЕ НАЙДЕНЫ ВАЖНЫЕ РАЗДЕЛЫ:</h4>
+                    <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 10px; padding: 25px; margin-top: 25px;">
+                        <h4 style="margin: 0 0 20px 0; color: #856404; font-size: 20px;">⚠️ КРИТИЧЕСКИЕ ОТСУТСТВУЮЩИЕ РАЗДЕЛЫ</h4>
+                        
                         ${data.missingSections.map(section => `
-                            <div style="padding: 8px 0; color: #856404;">
-                                📄 ${section.title}
+                            <div style="background: white; border-left: 4px solid #dc3545; padding: 20px; margin-bottom: 15px; border-radius: 5px;">
+                                <div style="font-size: 18px; font-weight: 600; color: #dc3545; margin-bottom: 10px;">
+                                    📄 ${section.title}
+                                </div>
+                                
+                                <div style="margin-bottom: 10px;">
+                                    <strong style="color: #666;">Требуется по:</strong> ${section.requiredBy || 'Законодательство РФ'}
+                                </div>
+                                
+                                ${section.hasFine ? `
+                                    <div style="background: #fff5f5; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                                        <div style="font-weight: 600; color: #dc3545; margin-bottom: 8px;">💰 Штраф за отсутствие:</div>
+                                        <div style="margin-left: 10px;">
+                                            <div style="margin: 5px 0;">• ИП: <strong>${section.fineIP}</strong></div>
+                                            <div style="margin: 5px 0;">• ООО: <strong>${section.fineOOO}</strong></div>
+                                        </div>
+                                    </div>
+                                ` : section.risk ? `
+                                    <div style="background: #fff5f5; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                                        <div style="font-weight: 600; color: #dc3545; margin-bottom: 8px;">⚠️ Риски:</div>
+                                        <div style="margin-left: 10px; color: #666;">${section.risk}</div>
+                                    </div>
+                                ` : ''}
+                                
+                                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 5px; margin-top: 15px; text-align: center;">
+                                    <div style="font-size: 16px; margin-bottom: 8px;">💎 Мы можем сгенерировать этот документ</div>
+                                    <div style="font-size: 24px; font-weight: 700;">${section.generationPrice}₽</div>
+                                    <div style="font-size: 13px; opacity: 0.9; margin-top: 5px;">С плейсхолдерами для ваших данных</div>
+                                </div>
                             </div>
                         `).join('')}
-                        <p style="margin-top: 15px; font-size: 14px; color: #856404;">
-                            💡 Эти разделы рекомендуется добавить для полного соответствия законодательству
-                        </p>
+                        
+                        ${data.packages ? `
+                            <div style="background: white; padding: 25px; border-radius: 10px; margin-top: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                                <h4 style="margin: 0 0 20px 0; text-align: center; color: #333; font-size: 22px;">📦 ВЫГОДНЫЕ ПАКЕТЫ</h4>
+                                
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                    <div style="background: #f8f9fa; border: 2px solid #e0e0e0; border-radius: 10px; padding: 20px; text-align: center;">
+                                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">${data.packages.single.name}</div>
+                                        <div style="font-size: 28px; font-weight: 700; color: #667eea; margin: 10px 0;">${data.packages.single.price}₽</div>
+                                        <div style="font-size: 14px; color: #666;">${data.packages.single.documents} документ</div>
+                                    </div>
+                                    
+                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; padding: 20px; text-align: center; position: relative; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">
+                                        <div style="position: absolute; top: -10px; right: 10px; background: #ffc107; color: #333; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: 700;">ВЫГОДНО!</div>
+                                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">${data.packages.standard.name}</div>
+                                        <div style="font-size: 28px; font-weight: 700; margin: 10px 0;">${data.packages.standard.price}₽</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">${data.packages.standard.documents} документа</div>
+                                        <div style="font-size: 13px; opacity: 0.8; margin-top: 8px;">Экономия ${data.packages.standard.savings}₽</div>
+                                    </div>
+                                    
+                                    <div style="background: #f8f9fa; border: 2px solid #28a745; border-radius: 10px; padding: 20px; text-align: center;">
+                                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px; color: #28a745;">${data.packages.premium.name}</div>
+                                        <div style="font-size: 28px; font-weight: 700; color: #28a745; margin: 10px 0;">${data.packages.premium.price}₽</div>
+                                        <div style="font-size: 14px; color: #666;">${data.packages.premium.documents} документов</div>
+                                        <div style="font-size: 13px; color: #28a745; margin-top: 8px; font-weight: 600;">Экономия ${data.packages.premium.savings}₽</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="text-align: center; margin-top: 20px;">
+                                    <button onclick="openOrderModal(data.missingSections, data.packages)" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 15px 40px; border-radius: 25px; font-size: 18px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.5)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.4)'">
+                                        🚀 Заказать документы
+                                    </button>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 `;
             }
@@ -622,6 +829,17 @@
             const html = `
                 <div style="background: #f8f9fa; padding: 30px; border-radius: 15px;">
                     <h3 style="color: #dc3545; margin-bottom: 20px;">🚨 ЭКСПРЕСС-АНАЛИЗ ЗАВЕРШЁН</h3>
+                    
+                    ${data.sourceUrl ? `
+                        <div style="background: #e7f3ff; border-left: 4px solid #667eea; padding: 15px; margin-bottom: 20px; border-radius: 5px;">
+                            <div style="font-size: 14px; color: #555; margin-bottom: 5px;">
+                                📄 Проверен документ:
+                            </div>
+                            <div style="font-size: 16px; font-weight: 600; color: #333; word-break: break-all;">
+                                ${data.documentType === 'website' ? '🌐 ' : '📝 '}${data.sourceUrl}
+                            </div>
+                        </div>
+                    ` : ''}
                     
                     <div style="background: white; padding: 25px; border-radius: 10px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                         <h4 style="margin: 0 0 15px 0; text-align: center;">⚠️ ИТОГОВЫЕ РИСКИ</h4>
@@ -690,6 +908,16 @@
                     <h2>📊 ПОЛНЫЙ COMPLIANCE ОТЧЁТ</h2>
                     <p>Дата анализа: ${new Date(data.timestamp).toLocaleString('ru-RU')}</p>
                     <p>Версия: ${data.version}</p>
+                    ${data.sourceUrl ? `
+                        <div style="background: #e7f3ff; border-left: 4px solid #667eea; padding: 15px; margin-top: 15px; border-radius: 5px;">
+                            <div style="font-size: 14px; color: #555; margin-bottom: 5px;">
+                                📄 Проверенный документ:
+                            </div>
+                            <div style="font-size: 16px; font-weight: 600; color: #333; word-break: break-all;">
+                                ${data.documentType === 'website' ? '🌐 ' : '📝 '}${data.sourceUrl}
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
 
                 <div class="context-info">
@@ -988,6 +1216,174 @@
             document.getElementById('result').innerHTML = html;
             document.getElementById('result').classList.add('show');
         }
+
+        // =============================================================================
+        // ФУНКЦИИ ДЛЯ МОДАЛКИ ЗАКАЗА ДОКУМЕНТОВ
+        // =============================================================================
+
+        let availableDocuments = [];
+        let selectedDocuments = [];
+
+        function openOrderModal(missingSections, packages) {
+            availableDocuments = missingSections;
+            selectedDocuments = [];
+            
+            // Генерируем список документов
+            const documentsList = document.getElementById('documentsList');
+            documentsList.innerHTML = missingSections.map(doc => `
+                <label class="document-checkbox" onclick="toggleDocument('${doc.type}', event)">
+                    <input type="checkbox" id="doc-${doc.type}" onchange="updateSelection()">
+                    <div class="document-info">
+                        <div style="font-size: 18px; font-weight: 600; color: #333; margin-bottom: 5px;">
+                            ${doc.title}
+                        </div>
+                        <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+                            Требуется по: ${doc.requiredBy || 'Законодательство РФ'}
+                        </div>
+                        ${doc.hasFine ? `
+                            <div style="font-size: 13px; color: #dc3545;">
+                                💰 Штраф за отсутствие: ${doc.fineIP}
+                            </div>
+                        ` : doc.risk ? `
+                            <div style="font-size: 13px; color: #f59e0b;">
+                                ⚠️ ${doc.risk}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="document-price">${doc.generationPrice}₽</div>
+                </label>
+            `).join('');
+            
+            // Показываем модалку
+            document.getElementById('orderModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeOrderModal() {
+            document.getElementById('orderModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+            selectedDocuments = [];
+        }
+
+        function toggleDocument(docType, event) {
+            // Останавливаем всплытие чтобы чекбокс работал
+            if (event.target.tagName === 'INPUT') return;
+            
+            const checkbox = document.getElementById(`doc-${docType}`);
+            checkbox.checked = !checkbox.checked;
+            updateSelection();
+        }
+
+        function updateSelection() {
+            selectedDocuments = [];
+            let totalPrice = 0;
+            
+            availableDocuments.forEach(doc => {
+                const checkbox = document.getElementById(`doc-${doc.type}`);
+                const label = checkbox.closest('.document-checkbox');
+                
+                if (checkbox.checked) {
+                    selectedDocuments.push(doc);
+                    totalPrice += doc.generationPrice;
+                    label.classList.add('selected');
+                } else {
+                    label.classList.remove('selected');
+                }
+            });
+            
+            // Обновляем UI
+            document.getElementById('selectedCount').textContent = selectedDocuments.length;
+            document.getElementById('totalPrice').textContent = `${totalPrice.toLocaleString('ru-RU')}₽`;
+            
+            // Показываем экономию если применяется пакет
+            const savingsInfo = document.getElementById('savingsInfo');
+            let savings = 0;
+            
+            if (selectedDocuments.length === 3) {
+                const packagePrice = 2990;
+                savings = totalPrice - packagePrice;
+                totalPrice = packagePrice;
+                document.getElementById('totalPrice').textContent = `${packagePrice.toLocaleString('ru-RU')}₽`;
+            } else if (selectedDocuments.length >= 5) {
+                const packagePrice = 4490;
+                savings = totalPrice - packagePrice;
+                totalPrice = packagePrice;
+                document.getElementById('totalPrice').textContent = `${packagePrice.toLocaleString('ru-RU')}₽`;
+            }
+            
+            if (savings > 0) {
+                savingsInfo.style.display = 'block';
+                document.getElementById('savingsAmount').textContent = `${savings.toLocaleString('ru-RU')}₽`;
+            } else {
+                savingsInfo.style.display = 'none';
+            }
+            
+            // Активируем/деактивируем кнопку
+            const orderButton = document.getElementById('orderButton');
+            orderButton.disabled = selectedDocuments.length === 0;
+        }
+
+        function proceedToPayment() {
+            if (selectedDocuments.length === 0) {
+                alert('Выберите хотя бы один документ');
+                return;
+            }
+            
+            // Пока просто показываем alert, позже интегрируем YooKassa
+            const documentTypes = selectedDocuments.map(d => d.type);
+            let totalPrice = selectedDocuments.reduce((sum, d) => sum + d.generationPrice, 0);
+            
+            // Применяем скидки пакетов
+            if (selectedDocuments.length === 3) {
+                totalPrice = 2990;
+            } else if (selectedDocuments.length >= 5) {
+                totalPrice = 4490;
+            }
+            
+            alert(`Заказ оформлен!\n\nДокументы: ${documentTypes.length} шт.\nСумма: ${totalPrice}₽\n\n(Интеграция с YooKassa в разработке)`);
+            
+            // TODO: Интеграция с YooKassa
+            // 1. Создать платёж через YooKassa API
+            // 2. Перенаправить на страницу оплаты
+            // 3. После успешной оплаты вызвать /api/generate-documents
+            // 4. Показать документы для скачивания
+            
+            closeOrderModal();
+        }
     </script>
+
+    <!-- Модальное окно заказа документов -->
+    <div class="modal-overlay" id="orderModal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeOrderModal()">×</button>
+            
+            <h2 style="margin-bottom: 10px; color: #333;">📄 Заказ юридических документов</h2>
+            <p style="color: #666; margin-bottom: 30px;">Выберите документы для генерации</p>
+            
+            <div id="documentsList"></div>
+            
+            <div class="order-summary">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <div style="font-size: 14px; color: #666; margin-bottom: 5px;">Выбрано документов:</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #333;" id="selectedCount">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; color: #666; margin-bottom: 5px; text-align: right;">Итого:</div>
+                        <div style="font-size: 32px; font-weight: 700; color: #667eea;" id="totalPrice">0₽</div>
+                    </div>
+                </div>
+                
+                <div id="savingsInfo" style="display: none; background: #d4edda; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+                    <span style="color: #155724; font-weight: 600;">🎉 Экономия: <span id="savingsAmount">0₽</span></span>
+                </div>
+                
+                <button class="btn-order" onclick="proceedToPayment()" id="orderButton" disabled>
+                    💳 Перейти к оплате
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
