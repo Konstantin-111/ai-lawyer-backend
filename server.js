@@ -20,6 +20,86 @@ const openai = new OpenAI({
 const ASSISTANT_ID = process.env.ASSISTANT_ID;
 
 // =============================================================================
+// ЮРИДИЧЕСКИЕ РАЗДЕЛЫ И ЦЕНЫ НА ГЕНЕРАЦИЮ
+// =============================================================================
+
+const LEGAL_SECTIONS_INFO = {
+  'Privacy Policy': {
+    nameRu: 'Политика конфиденциальности',
+    requiredBy: 'ФЗ-152, Статья 18.1',
+    fineForMissing: {
+      ip: { min: 10000, max: 20000 },
+      ooo: { min: 60000, max: 100000 }
+    },
+    hasFine: true,
+    generationPrice: 1490,
+    priority: 1
+  },
+  'Terms of Service': {
+    nameRu: 'Публичная оферта',
+    requiredBy: 'ГК РФ, Статья 437',
+    fineForMissing: null,
+    risk: 'Риск споров с клиентами, невозможность взыскания оплаты',
+    hasFine: false,
+    generationPrice: 1490,
+    priority: 2
+  },
+  'Refund Policy': {
+    nameRu: 'Условия возврата',
+    requiredBy: 'ЗоЗПП, Статья 26.1',
+    fineForMissing: {
+      ip: { min: 10000, max: 50000 },
+      ooo: { min: 50000, max: 500000 }
+    },
+    hasFine: true,
+    generationPrice: 1490,
+    priority: 3
+  },
+  'Cookie Policy': {
+    nameRu: 'Политика использования cookies',
+    requiredBy: 'ФЗ-152, Статья 18',
+    fineForMissing: {
+      ip: { min: 10000, max: 20000 },
+      ooo: { min: 60000, max: 100000 }
+    },
+    hasFine: true,
+    generationPrice: 1490,
+    priority: 4
+  },
+  'Shipping Policy': {
+    nameRu: 'Условия доставки',
+    requiredBy: 'ЗоЗПП, Статья 10',
+    fineForMissing: {
+      ip: { min: 10000, max: 30000 },
+      ooo: { min: 100000, max: 500000 }
+    },
+    hasFine: true,
+    generationPrice: 1490,
+    priority: 5
+  }
+};
+
+const DOCUMENT_GENERATION_PACKAGES = {
+  single: {
+    name: 'Один документ',
+    price: 1490,
+    documents: 1
+  },
+  standard: {
+    name: 'Стандарт',
+    price: 2990,
+    documents: 3,
+    savings: 1480
+  },
+  premium: {
+    name: 'Всё включено',
+    price: 4490,
+    documents: 5,
+    savings: 2960
+  }
+};
+
+// =============================================================================
 // 💰 ТАБЛИЦА ШТРАФОВ ИЗ КОАП РФ (фиксированные суммы)
 // =============================================================================
 const FINES_TABLE = {
@@ -1160,13 +1240,47 @@ function formatFreeReport(analysis) {
     });
   }
   
-  // Отсутствующие разделы
+  // Отсутствующие разделы с детальной информацией
   if (analysis.recommendedSections && analysis.recommendedSections.length > 0) {
     analysis.recommendedSections.forEach(rec => {
-      missingSections.push({
-        title: rec,
-        recommended: true
-      });
+      // Пытаемся найти информацию о разделе
+      let sectionInfo = null;
+      
+      // Ищем по типу раздела в LEGAL_SECTIONS_INFO
+      for (const [key, info] of Object.entries(LEGAL_SECTIONS_INFO)) {
+        if (rec.toLowerCase().includes(info.nameRu.toLowerCase()) ||
+            rec.toLowerCase().includes(key.toLowerCase())) {
+          sectionInfo = { ...info, type: key };
+          break;
+        }
+      }
+      
+      if (sectionInfo) {
+        const formatNumber = (num) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        
+        missingSections.push({
+          title: sectionInfo.nameRu,
+          type: sectionInfo.type,
+          requiredBy: sectionInfo.requiredBy,
+          hasFine: sectionInfo.hasFine,
+          fineIP: sectionInfo.hasFine ? 
+            `от ${formatNumber(sectionInfo.fineForMissing.ip.min)}₽ до ${formatNumber(sectionInfo.fineForMissing.ip.max)}₽` : 
+            null,
+          fineOOO: sectionInfo.hasFine ? 
+            `от ${formatNumber(sectionInfo.fineForMissing.ooo.min)}₽ до ${formatNumber(sectionInfo.fineForMissing.ooo.max)}₽` : 
+            null,
+          risk: sectionInfo.risk || null,
+          generationPrice: sectionInfo.generationPrice,
+          recommended: true
+        });
+      } else {
+        // Fallback для неизвестных разделов
+        missingSections.push({
+          title: rec,
+          recommended: true,
+          generationPrice: 1490
+        });
+      }
     });
   }
   
@@ -1182,6 +1296,7 @@ function formatFreeReport(analysis) {
     },
     checkedSections: checkedSections,
     missingSections: missingSections,
+    packages: DOCUMENT_GENERATION_PACKAGES,
     upgradePrompt: 'Оплатите детальный отчёт за 1,990₽ чтобы получить цитаты из документа, статьи законов и рекомендации'
   };
 }
@@ -1534,6 +1649,85 @@ app.post('/api/check-premium', async (req, res) => {
     
   } catch (error) {
     console.error('[PREMIUM] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// =============================================================================
+// ENDPOINT: ГЕНЕРАЦИЯ ЮРИДИЧЕСКИХ ДОКУМЕНТОВ
+// =============================================================================
+
+app.post('/api/generate-documents', async (req, res) => {
+  try {
+    const { documentTypes, paymentId } = req.body;
+    
+    if (!documentTypes || !Array.isArray(documentTypes) || documentTypes.length === 0) {
+      return res.status(400).json({ error: 'Укажите типы документов для генерации' });
+    }
+    
+    // TODO: Проверка оплаты через paymentId
+    
+    console.log(`[GENERATE] Генерация документов: ${documentTypes.join(', ')}`);
+    
+    const generatedDocuments = [];
+    
+    for (const docType of documentTypes) {
+      const sectionInfo = LEGAL_SECTIONS_INFO[docType];
+      
+      if (!sectionInfo) {
+        console.warn(`Неизвестный тип документа: ${docType}`);
+        continue;
+      }
+      
+      console.log(`  Генерирую: ${sectionInfo.nameRu}...`);
+      
+      const prompt = `🔧 СОЗДАЙ ЮРИДИЧЕСКИЙ ДОКУМЕНТ
+
+Тип документа: ${sectionInfo.nameRu}
+Требования: ${sectionInfo.requiredBy}
+
+📚 ОБЯЗАТЕЛЬНО используй File Search (Vector Store) чтобы найти ВСЕ требования закона!
+
+⚠️ КРИТИЧЕСКИ ВАЖНО:
+1. Документ должен ПОЛНОСТЬЮ соответствовать законодательству РФ 2025 года
+2. Используй File Search для поиска точных формулировок
+3. Используй ПЛЕЙСХОЛДЕРЫ для данных компании:
+   - [НАЗВАНИЕ КОМПАНИИ]
+   - [ИНН]
+   - [ОГРН]
+   - [ЮРИДИЧЕСКИЙ АДРЕС]
+   - [ТЕЛЕФОН]
+   - [EMAIL]
+   - [URL САЙТА]
+   - и т.д.
+4. Документ должен быть готов к использованию после замены плейсхолдеров
+5. Включи ВСЕ обязательные разделы по закону
+6. Формат: Чистый текст, структурированный, с заголовками
+
+Верни ТОЛЬКО текст документа без комментариев и объяснений.`;
+      
+      const documentText = await runAssistant(prompt, PREMIUM_GENERATOR);
+      
+      generatedDocuments.push({
+        type: docType,
+        name: sectionInfo.nameRu,
+        content: documentText,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    res.json({
+      success: true,
+      documents: generatedDocuments,
+      totalPrice: documentTypes.length * 1490,
+      message: 'Документы успешно сгенерированы'
+    });
+    
+  } catch (error) {
+    console.error('[GENERATE] Error:', error);
     res.status(500).json({
       success: false,
       error: error.message
