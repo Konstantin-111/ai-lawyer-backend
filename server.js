@@ -181,7 +181,9 @@ const FINES_TABLE = {
 // ПРОМПТЫ ДЛЯ 3-ЭТАПНОЙ ВРАЖДЕБНОЙ ПРОВЕРКИ
 // =============================================================================
 
-const STEP1_INSPECTOR = `🔴 ТЫ — ИНСПЕКТОР РОСПОТРЕБНАДЗОРА/ФНС
+const STEP1_INSPECTOR = `⚠️ ВАЖНО: ОТВЕЧАЙ ТОЛЬКО В ФОРМАТЕ JSON БЕЗ ПОЯСНЕНИЙ!
+
+🔴 ТЫ — ИНСПЕКТОР РОСПОТРЕБНАДЗОРА/ФНС
 
 Твоя задача: НАЙТИ ВСЕ ВОЗМОЖНЫЕ НАРУШЕНИЯ для составления протокола.
 
@@ -895,7 +897,7 @@ async function runAssistant(userMessage, instructions) {
   }
 }
 
-// Парсинг JSON из ответа (может быть в markdown блоках)
+// Парсинг JSON из ответа (может быть в markdown блоках или с текстом до/после)
 function parseJSON(text) {
   try {
     // Убираем markdown code blocks
@@ -906,10 +908,23 @@ function parseJSON(text) {
       return JSON.parse(cleaned);
     } catch (e) {
       // Если не получилось, ищем JSON в тексте
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+      // Ищем с самой первой { до последней }
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonText = cleaned.substring(firstBrace, lastBrace + 1);
+        try {
+          return JSON.parse(jsonText);
+        } catch (e2) {
+          // Если всё ещё не парсится, пробуем найти через regex
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+          }
+        }
       }
+      
       throw e;
     }
   } catch (error) {
